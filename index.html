@@ -1339,6 +1339,115 @@
             content: '✓';
             color: var(--secondary);
         }
+
+        .trial-license-box {
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .trial-license-box label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .license-key-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .license-key-display code {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            letter-spacing: 2px;
+        }
+
+        .license-key-display .copy-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 6px;
+            color: #000;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .license-key-display .copy-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .license-expiry {
+            color: var(--secondary);
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        .download-instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+
+        .download-instructions h4 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--text);
+            margin-bottom: 1rem;
+        }
+
+        .download-instructions ol {
+            padding-left: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .download-instructions li {
+            padding: 0.5rem 0;
+            line-height: 1.6;
+        }
+
+        .download-instructions code {
+            background: rgba(0, 255, 136, 0.2);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            color: var(--primary);
+            font-size: 0.9rem;
+        }
+
+        .download-link {
+            color: var(--primary);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .download-link:hover {
+            text-decoration: underline;
+        }
+
+        .trial-note {
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #ffc800;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -1855,8 +1964,30 @@ AUTO_SELL=true
             <!-- Trial Success Message -->
             <div class="tx-success" id="trialSuccess" style="display: none;">
                 <div class="success-icon" style="background: var(--gradient-secondary);">✓</div>
-                <h3>Trial Activated!</h3>
-                <p>Check your email for the trial license key and download instructions.</p>
+                <h3>🎉 Trial Activated!</h3>
+                
+                <div class="trial-license-box">
+                    <label>Your Trial License Key:</label>
+                    <div class="license-key-display">
+                        <code id="trialLicenseKey">TRIAL-XXXX-XXXX-XXXX</code>
+                        <button class="copy-btn" onclick="copyTrialLicense()">📋 Copy</button>
+                    </div>
+                    <p class="license-expiry">⏰ Expires in 3 days</p>
+                </div>
+                
+                <div class="download-instructions">
+                    <h4>📥 Download Instructions:</h4>
+                    <ol>
+                        <li><a href="https://github.com/sonddy/zoot-sniper/releases" target="_blank" class="download-link">Download the bot from GitHub Releases →</a></li>
+                        <li>Extract the ZIP file to any folder</li>
+                        <li>Open <code>config.txt</code> and paste your license key</li>
+                        <li>Add your Pump Portal private key</li>
+                        <li>Run <code>START_BOT.bat</code> (Windows) or <code>START_BOT.sh</code> (Mac)</li>
+                    </ol>
+                </div>
+                
+                <p class="trial-note">💡 <strong>Tip:</strong> Save your license key! You'll need it to run the bot.</p>
+                
                 <button class="btn btn-secondary" onclick="closeTrialModal()">Close</button>
             </div>
             
@@ -2066,6 +2197,32 @@ AUTO_SELL=true
             document.body.style.overflow = 'auto';
         }
 
+        // Generate a trial license key
+        function generateTrialLicense() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const segments = [];
+            for (let s = 0; s < 3; s++) {
+                let segment = '';
+                for (let i = 0; i < 4; i++) {
+                    segment += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                segments.push(segment);
+            }
+            return 'TRIAL-' + segments.join('-');
+        }
+
+        // Copy trial license key
+        function copyTrialLicense() {
+            const licenseKey = document.getElementById('trialLicenseKey').textContent;
+            navigator.clipboard.writeText(licenseKey).then(() => {
+                const btn = document.querySelector('.license-key-display .copy-btn');
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy';
+                }, 2000);
+            });
+        }
+
         async function submitTrial() {
             const email = document.getElementById('trialEmail').value.trim();
             
@@ -2078,10 +2235,17 @@ AUTO_SELL=true
             btn.disabled = true;
             document.getElementById('trialBtnText').textContent = '⏳ Processing...';
             
+            // Generate trial license key
+            const licenseKey = generateTrialLicense();
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 3);
+            
             const trialData = {
                 email: email,
                 type: 'FREE_TRIAL',
+                licenseKey: licenseKey,
                 duration: '3 days',
+                expiresAt: expiryDate.toISOString(),
                 timestamp: new Date().toISOString()
             };
             
@@ -2095,15 +2259,14 @@ AUTO_SELL=true
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(trialData)
                 });
-                
-                document.querySelector('.trial-form').style.display = 'none';
-                document.getElementById('trialSuccess').style.display = 'block';
-                
             } catch (error) {
                 console.error('Submission error:', error);
-                document.querySelector('.trial-form').style.display = 'none';
-                document.getElementById('trialSuccess').style.display = 'block';
             }
+            
+            // Display the license key in the success modal
+            document.getElementById('trialLicenseKey').textContent = licenseKey;
+            document.querySelector('.trial-form').style.display = 'none';
+            document.getElementById('trialSuccess').style.display = 'block';
             
             btn.disabled = false;
         }
