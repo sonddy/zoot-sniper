@@ -1622,7 +1622,7 @@
 
     <section class="pricing" id="pricing">
         <h2 class="section-title">Choose Your Plan</h2>
-        <p class="section-subtitle">One-time purchase, no recurring fees • Pay with SOL or USDC</p>
+        <p class="section-subtitle">One-time purchase, no recurring fees • Pay with SOL</p>
         
         <!-- Free Trial Banner -->
         <div class="trial-banner">
@@ -1640,8 +1640,8 @@
             <div class="price-card">
                 <h3 class="price-name">Standard</h3>
                 <p class="price-duration">30 Days Access</p>
-                <div class="price-amount">$44<span>/once</span></div>
-                <div class="price-crypto" id="standardPrice">≈ <span class="sol-amount">--</span> SOL or 44 USDC</div>
+                <div class="price-amount">0.53<span> SOL</span></div>
+                <div class="price-crypto">One-time payment</div>
                 <ul class="price-features">
                     <li>Full bot access for 30 days</li>
                     <li>Windows & Mac support</li>
@@ -1650,14 +1650,14 @@
                     <li>Stop loss protection</li>
                     <li>Email support</li>
                 </ul>
-                <button class="btn btn-secondary" id="standardBtn" onclick="openPayment('Standard', standardSOL, '44', '$44')">Get Standard</button>
+                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.53', '53', '0.53 SOL')">Get Standard</button>
             </div>
             
             <div class="price-card popular">
                 <h3 class="price-name">Pro</h3>
                 <p class="price-duration">90 Days Access</p>
-                <div class="price-amount">$125<span>/once</span></div>
-                <div class="price-crypto" id="proPrice">≈ <span class="sol-amount">--</span> SOL or 125 USDC</div>
+                <div class="price-amount">1.25<span> SOL</span></div>
+                <div class="price-crypto">One-time payment</div>
                 <ul class="price-features">
                     <li>Everything in Standard</li>
                     <li>90 days access (save 33%)</li>
@@ -1666,14 +1666,14 @@
                     <li>Custom profit targets</li>
                     <li>Telegram support group</li>
                 </ul>
-                <button class="btn btn-primary" id="proBtn" onclick="openPayment('Pro', proSOL, '125', '$125')">Get Pro</button>
+                <button class="btn btn-primary" onclick="openPayment('Pro', '1.25', '125', '1.25 SOL')">Get Pro</button>
             </div>
             
             <div class="price-card">
                 <h3 class="price-name">Yearly</h3>
                 <p class="price-duration">365 Days Access</p>
-                <div class="price-amount">$449<span>/year</span></div>
-                <div class="price-crypto" id="yearlyPrice">≈ <span class="sol-amount">--</span> SOL or 449 USDC</div>
+                <div class="price-amount">5.3<span> SOL</span></div>
+                <div class="price-crypto">One-time payment</div>
                 <ul class="price-features">
                     <li>Everything in Pro</li>
                     <li>Full year of access</li>
@@ -1682,7 +1682,7 @@
                     <li>Priority support</li>
                     <li>Feature request priority</li>
                 </ul>
-                <button class="btn btn-secondary" id="yearlyBtn" onclick="openPayment('Yearly', yearlySOL, '449', '$449')">Get Yearly</button>
+                <button class="btn btn-secondary" onclick="openPayment('Yearly', '5.3', '530', '5.3 SOL')">Get Yearly</button>
             </div>
         </div>
     </section>
@@ -1775,17 +1775,14 @@
             
             <div class="plan-info">
                 <span class="plan-name" id="modalPlanName">Pro Plan</span>
-                <span class="plan-price" id="modalPlanPrice">$125</span>
+                <span class="plan-price" id="modalPlanPrice">1.25 SOL</span>
             </div>
             
-            <!-- Currency Toggle -->
+            <!-- Payment Currency -->
             <div class="currency-toggle">
-                <button class="currency-btn sol active" onclick="switchCurrency('sol')">
-                    <span>◎</span> SOL
-                </button>
-                <button class="currency-btn usdc" onclick="switchCurrency('usdc')">
-                    <span>$</span> USDC
-                </button>
+                <div class="currency-btn sol active" style="cursor: default;">
+                    <span>◎</span> Pay with SOL
+                </div>
             </div>
             
             <div class="payment-amount">
@@ -1917,63 +1914,18 @@
     </div>
 
     <script>
-        // Payment wallet addresses
+        // Payment wallet address (SOL)
         const PAYMENT_WALLET = '2LK7yxZsy6YVCkFQ4PrL644ve1fgRj5FuDexj5JgS753';
-        // USDC uses the same wallet on Solana network
-        const USDC_WALLET = '2LK7yxZsy6YVCkFQ4PrL644ve1fgRj5FuDexj5JgS753';
         
-        // Pricing in USD
+        // Fixed SOL Prices
         const PRICES = {
-            standard: 44,
-            pro: 125,
-            yearly: 449
+            standard: 0.53,
+            pro: 1.25,
+            yearly: 5.3
         };
-        
-        // Dynamic SOL prices (will be updated from API)
-        let solPrice = 190; // Default fallback
-        let standardSOL = '0.23';
-        let proSOL = '0.66';
-        let yearlySOL = '2.36';
-        
-        // Fetch real-time SOL price from CoinGecko
-        async function fetchSOLPrice() {
-            try {
-                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-                const data = await response.json();
-                if (data.solana && data.solana.usd) {
-                    solPrice = data.solana.usd;
-                    updatePriceDisplays();
-                    console.log('SOL Price updated: $' + solPrice);
-                }
-            } catch (error) {
-                console.log('Using fallback SOL price');
-                updatePriceDisplays();
-            }
-        }
-        
-        // Update all price displays with current SOL price
-        function updatePriceDisplays() {
-            standardSOL = (PRICES.standard / solPrice).toFixed(2);
-            proSOL = (PRICES.pro / solPrice).toFixed(2);
-            yearlySOL = (PRICES.yearly / solPrice).toFixed(2);
-            
-            // Update price cards
-            const standardEl = document.querySelector('#standardPrice .sol-amount');
-            const proEl = document.querySelector('#proPrice .sol-amount');
-            const yearlyEl = document.querySelector('#yearlyPrice .sol-amount');
-            
-            if (standardEl) standardEl.textContent = standardSOL;
-            if (proEl) proEl.textContent = proSOL;
-            if (yearlyEl) yearlyEl.textContent = yearlySOL;
-        }
-        
-        // Fetch price on page load and every 60 seconds
-        fetchSOLPrice();
-        setInterval(fetchSOLPrice, 60000);
         
         // Current state
         let currentPlan = {};
-        let currentCurrency = 'sol';
         
         function toggleFaq(element) {
             const item = element.parentElement;
@@ -2012,8 +1964,7 @@
         }
 
         function copyAddress() {
-            const wallet = currentCurrency === 'sol' ? PAYMENT_WALLET : USDC_WALLET;
-            navigator.clipboard.writeText(wallet).then(() => {
+            navigator.clipboard.writeText(PAYMENT_WALLET).then(() => {
                 document.getElementById('copyText').textContent = '✓ Copied!';
                 setTimeout(() => {
                     document.getElementById('copyText').textContent = '📋 Copy Address';
@@ -2037,48 +1988,13 @@
             }
         });
 
-        // Currency switching
-        function switchCurrency(currency) {
-            currentCurrency = currency;
-            
-            // Update buttons
-            document.querySelectorAll('.currency-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.currency-btn.${currency}`).classList.add('active');
-            
-            // Update displayed amount and labels
-            if (currency === 'sol') {
-                document.getElementById('modalCryptoAmount').textContent = currentPlan.solAmount + ' SOL';
-                document.getElementById('walletLabel').textContent = 'To this Solana wallet address:';
-                document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
-                document.getElementById('stepText1').textContent = 'Send the exact SOL amount to the address above';
-                document.getElementById('modalCryptoAmount').style.background = 'linear-gradient(135deg, #9945FF, #14F195)';
-            } else {
-                document.getElementById('modalCryptoAmount').textContent = currentPlan.usdcAmount + ' USDC';
-                document.getElementById('walletLabel').textContent = 'To this Solana wallet address (USDC SPL):';
-                document.getElementById('walletAddress').textContent = USDC_WALLET;
-                document.getElementById('stepText1').textContent = 'Send the exact USDC amount to the address above';
-                document.getElementById('modalCryptoAmount').style.background = 'linear-gradient(135deg, #2775CA, #4A90D9)';
-            }
-            
-            // Update QR code
-            const wallet = currency === 'sol' ? PAYMENT_WALLET : USDC_WALLET;
-            const amount = currency === 'sol' ? currentPlan.solAmount : currentPlan.usdcAmount;
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${wallet}?amount=${amount}&bgcolor=0a0a0f&color=00ff88`;
-            document.getElementById('qrCode').src = qrUrl;
-        }
-
-        function openPayment(planName, solAmount, usdcAmount, usdPrice) {
-            currentPlan = { planName, solAmount, usdcAmount, usdPrice };
-            currentCurrency = 'sol';
+        function openPayment(planName, solAmount, usdcAmount, price) {
+            currentPlan = { planName, solAmount, price };
             
             document.getElementById('modalPlanName').textContent = planName + ' Plan';
-            document.getElementById('modalPlanPrice').textContent = usdPrice;
+            document.getElementById('modalPlanPrice').textContent = price;
             document.getElementById('modalCryptoAmount').textContent = solAmount + ' SOL';
             document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
-            
-            // Reset currency buttons
-            document.querySelectorAll('.currency-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector('.currency-btn.sol').classList.add('active');
             
             // Reset form
             document.getElementById('txIdInput').value = '';
@@ -2118,11 +2034,11 @@
                 txId: txId,
                 email: email,
                 plan: currentPlan.planName,
-                currency: currentCurrency.toUpperCase(),
-                amount: currentCurrency === 'sol' ? currentPlan.solAmount + ' SOL' : currentPlan.usdcAmount + ' USDC',
-                usdPrice: currentPlan.usdPrice,
+                currency: 'SOL',
+                amount: currentPlan.solAmount + ' SOL',
+                price: currentPlan.price,
                 timestamp: new Date().toISOString(),
-                wallet: currentCurrency === 'sol' ? PAYMENT_WALLET : USDC_WALLET
+                wallet: PAYMENT_WALLET
             };
             
             const payments = JSON.parse(localStorage.getItem('zoot_payments') || '[]');
