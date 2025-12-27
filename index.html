@@ -453,6 +453,35 @@
             color: var(--text-muted);
         }
 
+        .price-sol {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #9945FF, #14F195);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+        }
+
+        .sol-rate-note {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(153, 69, 255, 0.1);
+            border: 1px solid rgba(153, 69, 255, 0.2);
+            border-radius: 50px;
+            display: inline-block;
+            width: auto;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .pricing {
+            text-align: center;
+        }
+
         .price-features {
             list-style: none;
             margin-bottom: 2rem;
@@ -1223,12 +1252,14 @@
     <section class="pricing" id="pricing">
         <h2 class="section-title">Choose Your Plan</h2>
         <p class="section-subtitle">One-time purchase, no recurring fees</p>
+        <p class="sol-rate-note">💰 SOL prices based on ~$122/SOL rate. Send exact SOL amount shown in payment.</p>
         
         <div class="pricing-grid">
             <div class="price-card">
                 <h3 class="price-name">Standard</h3>
                 <p class="price-duration">30 Days Access</p>
-                <div class="price-amount">$49<span>/once</span></div>
+                <div class="price-amount">$44<span>/once</span></div>
+                <div class="price-sol">≈ 0.36 SOL</div>
                 <ul class="price-features">
                     <li>Full bot access for 30 days</li>
                     <li>Windows & Mac support</li>
@@ -1237,13 +1268,14 @@
                     <li>Stop loss protection</li>
                     <li>Email support</li>
                 </ul>
-                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.25', '$49')">Get Standard</button>
+                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.36', '$44')">Get Standard</button>
             </div>
             
             <div class="price-card popular">
                 <h3 class="price-name">Pro</h3>
                 <p class="price-duration">90 Days Access</p>
-                <div class="price-amount">$99<span>/once</span></div>
+                <div class="price-amount">$125<span>/once</span></div>
+                <div class="price-sol">≈ 1.02 SOL</div>
                 <ul class="price-features">
                     <li>Everything in Standard</li>
                     <li>90 days access (save 33%)</li>
@@ -1252,13 +1284,14 @@
                     <li>Custom profit targets</li>
                     <li>Telegram support group</li>
                 </ul>
-                <button class="btn btn-primary" onclick="openPayment('Pro', '0.5', '$99')">Get Pro</button>
+                <button class="btn btn-primary" onclick="openPayment('Pro', '1.02', '$125')">Get Pro</button>
             </div>
             
             <div class="price-card">
                 <h3 class="price-name">Lifetime</h3>
                 <p class="price-duration">Forever Access</p>
-                <div class="price-amount">$199<span>/once</span></div>
+                <div class="price-amount">$449<span>/once</span></div>
+                <div class="price-sol">≈ 3.68 SOL</div>
                 <ul class="price-features">
                     <li>Everything in Pro</li>
                     <li>Lifetime access forever</li>
@@ -1267,7 +1300,7 @@
                     <li>Private Discord channel</li>
                     <li>Feature request priority</li>
                 </ul>
-                <button class="btn btn-secondary" onclick="openPayment('Lifetime', '1', '$199')">Get Lifetime</button>
+                <button class="btn btn-secondary" onclick="openPayment('Lifetime', '3.68', '$449')">Get Lifetime</button>
             </div>
         </div>
     </section>
