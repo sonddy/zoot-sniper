@@ -120,6 +120,28 @@
             color: var(--primary);
         }
 
+        .nav-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary);
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+
+        .nav-icon:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 25px rgba(0, 255, 136, 0.6);
+            border-color: var(--accent);
+        }
+
+        .nav-icon-link {
+            display: flex;
+            align-items: center;
+            margin-left: 1.5rem;
+        }
+
         .hero {
             min-height: 100vh;
             display: flex;
@@ -1463,6 +1485,9 @@
                 <li><a href="#pricing">Pricing</a></li>
                 <li><a href="#faq">FAQ</a></li>
             </ul>
+            <a href="https://x.com/Zoot_coin" target="_blank" class="nav-icon-link" title="Follow us on X">
+                <img src="zoot-icon.jpg" alt="Zoot" class="nav-icon">
+            </a>
         </div>
     </nav>
 
@@ -1756,7 +1781,7 @@
         <p class="footer-text">The fastest pump.fun sniper bot</p>
         <div class="footer-links">
             <a href="mailto:zootcoins@gmail.com">Email Us</a>
-            <a href="https://twitter.com/ZootSniper" target="_blank">Twitter</a>
+            <a href="https://x.com/Zoot_coin" target="_blank">Twitter</a>
         </div>
         <p style="margin-top: 2rem; color: var(--text-muted); font-size: 0.8rem;">
             © 2024 Zoot Auto Sniper Bot. All rights reserved.<br>
