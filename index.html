@@ -675,6 +675,245 @@
                 align-items: center;
             }
         }
+
+        /* Payment Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: linear-gradient(180deg, #1a1a25 0%, #0f0f15 100%);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 24px;
+            padding: 2.5rem;
+            max-width: 480px;
+            width: 100%;
+            position: relative;
+            box-shadow: 0 0 60px rgba(0, 255, 136, 0.2);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 2rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.3s;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--primary);
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .solana-icon {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #9945FF, #14F195);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-header h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            color: var(--text);
+        }
+
+        .plan-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .plan-price {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .payment-amount {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .sol-label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .sol-amount {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #9945FF, #14F195);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .wallet-address-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .wallet-address-container label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .wallet-address {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            word-break: break-all;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+        }
+
+        .copy-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: transparent;
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            color: var(--primary);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: var(--primary);
+            color: var(--bg-dark);
+        }
+
+        .qr-container {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .qr-code {
+            width: 180px;
+            height: 180px;
+            border-radius: 12px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .qr-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .payment-steps {
+            margin-bottom: 1.5rem;
+        }
+
+        .payment-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .payment-step:last-child {
+            border-bottom: none;
+        }
+
+        .step-num {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--primary);
+            border-radius: 50%;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .telegram-confirm-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #0088cc, #00aaff);
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s;
+            margin-bottom: 1rem;
+        }
+
+        .telegram-confirm-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 136, 204, 0.4);
+        }
+
+        .modal-note {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 480px) {
+            .modal-content {
+                padding: 1.5rem;
+            }
+
+            .sol-amount {
+                font-size: 2rem;
+            }
+
+            .wallet-address {
+                font-size: 0.75rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -864,7 +1103,7 @@
                     <li>Stop loss protection</li>
                     <li>Email support</li>
                 </ul>
-                <a href="https://t.me/ZootSniper" class="btn btn-secondary" target="_blank">Get Standard</a>
+                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.25', '$49')">Get Standard</button>
             </div>
             
             <div class="price-card popular">
@@ -879,7 +1118,7 @@
                     <li>Custom profit targets</li>
                     <li>Telegram support group</li>
                 </ul>
-                <a href="https://t.me/ZootSniper" class="btn btn-primary" target="_blank">Get Pro</a>
+                <button class="btn btn-primary" onclick="openPayment('Pro', '0.5', '$99')">Get Pro</button>
             </div>
             
             <div class="price-card">
@@ -894,7 +1133,7 @@
                     <li>Private Discord channel</li>
                     <li>Feature request priority</li>
                 </ul>
-                <a href="https://t.me/ZootSniper" class="btn btn-secondary" target="_blank">Get Lifetime</a>
+                <button class="btn btn-secondary" onclick="openPayment('Lifetime', '1', '$199')">Get Lifetime</button>
             </div>
         </div>
     </section>
@@ -976,7 +1215,74 @@
         </p>
     </footer>
 
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closePayment()">&times;</span>
+            <div class="modal-header">
+                <div class="solana-icon">◎</div>
+                <h2>Pay with <span style="background: linear-gradient(135deg, #9945FF, #14F195); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Solana</span></h2>
+            </div>
+            
+            <div class="plan-info">
+                <span class="plan-name" id="modalPlanName">Pro Plan</span>
+                <span class="plan-price" id="modalPlanPrice">$99</span>
+            </div>
+            
+            <div class="payment-amount">
+                <span class="sol-label">Send exactly:</span>
+                <span class="sol-amount" id="modalSolAmount">0.5 SOL</span>
+            </div>
+            
+            <div class="wallet-address-container">
+                <label>To this Solana wallet address:</label>
+                <div class="wallet-address" id="walletAddress">
+                    YOUR_SOLANA_WALLET_ADDRESS_HERE
+                </div>
+                <button class="copy-btn" onclick="copyAddress()">
+                    <span id="copyText">📋 Copy Address</span>
+                </button>
+            </div>
+            
+            <div class="qr-container">
+                <img id="qrCode" src="" alt="QR Code" class="qr-code">
+                <p class="qr-label">Scan with Phantom or Solflare</p>
+            </div>
+            
+            <div class="payment-steps">
+                <div class="payment-step">
+                    <span class="step-num">1</span>
+                    <span>Send the exact SOL amount to the address above</span>
+                </div>
+                <div class="payment-step">
+                    <span class="step-num">2</span>
+                    <span>Copy your transaction signature (ID)</span>
+                </div>
+                <div class="payment-step">
+                    <span class="step-num">3</span>
+                    <span>Send the TX ID to us on Telegram</span>
+                </div>
+                <div class="payment-step">
+                    <span class="step-num">4</span>
+                    <span>Receive your license key within minutes!</span>
+                </div>
+            </div>
+            
+            <a href="https://t.me/ZootSniper" class="telegram-confirm-btn" target="_blank">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.223-.548.223l.188-2.85 5.18-4.68c.223-.198-.054-.308-.346-.11l-6.4 4.02-2.76-.918c-.6-.187-.612-.6.126-.89l10.782-4.156c.5-.18.94.12.778.89z"/></svg>
+                Send TX ID on Telegram
+            </a>
+            
+            <p class="modal-note">
+                ⚡ Payments are verified manually. You'll receive your license within 5-30 minutes during business hours.
+            </p>
+        </div>
+    </div>
+
     <script>
+        // Payment wallet address - CHANGE THIS TO YOUR SOLANA WALLET
+        const PAYMENT_WALLET = 'YOUR_SOLANA_WALLET_ADDRESS_HERE';
+        
         function toggleFaq(element) {
             const item = element.parentElement;
             item.classList.toggle('active');
@@ -1008,6 +1314,50 @@
                     behavior: 'smooth'
                 });
             });
+        });
+
+        // Payment Modal Functions
+        function openPayment(planName, solAmount, usdPrice) {
+            document.getElementById('modalPlanName').textContent = planName + ' Plan';
+            document.getElementById('modalPlanPrice').textContent = usdPrice;
+            document.getElementById('modalSolAmount').textContent = solAmount + ' SOL';
+            document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
+            
+            // Generate QR code using QR Server API
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${PAYMENT_WALLET}?amount=${solAmount}&bgcolor=0a0a0f&color=00ff88`;
+            document.getElementById('qrCode').src = qrUrl;
+            
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePayment() {
+            document.getElementById('paymentModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function copyAddress() {
+            navigator.clipboard.writeText(PAYMENT_WALLET).then(() => {
+                document.getElementById('copyText').textContent = '✓ Copied!';
+                setTimeout(() => {
+                    document.getElementById('copyText').textContent = '📋 Copy Address';
+                }, 2000);
+            });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('paymentModal');
+            if (event.target === modal) {
+                closePayment();
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closePayment();
+            }
         });
     </script>
 </body>
