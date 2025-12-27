@@ -1428,8 +1428,8 @@
     </div>
 
     <script>
-        // Payment wallet address - CHANGE THIS TO YOUR SOLANA WALLET
-        const PAYMENT_WALLET = 'YOUR_SOLANA_WALLET_ADDRESS_HERE';
+        // Payment wallet address
+        const PAYMENT_WALLET = '2LK7yxZsy6YVCkFQ4PrL644ve1fgRj5FuDexj5JgS753';
         
         function toggleFaq(element) {
             const item = element.parentElement;
@@ -1553,17 +1553,13 @@
             payments.push(paymentData);
             localStorage.setItem('zoot_payments', JSON.stringify(payments));
             
-            // Try to send via Formspree (you'll need to set up a Formspree form)
+            // Send to Formspree for email notification
             try {
-                // If you have Formspree set up, uncomment and add your form ID:
-                // await fetch('https://formspree.io/f/YOUR_FORM_ID', {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify(paymentData)
-                // });
-                
-                // For now, just simulate a delay
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                await fetch('https://formspree.io/f/mvzozyeb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(paymentData)
+                });
                 
                 // Show success
                 document.getElementById('txVerificationForm').style.display = 'none';
