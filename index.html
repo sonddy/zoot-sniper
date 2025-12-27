@@ -453,35 +453,6 @@
             color: var(--text-muted);
         }
 
-        .price-sol {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, #9945FF, #14F195);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 1.5rem;
-        }
-
-        .sol-rate-note {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
-            padding: 0.75rem 1.5rem;
-            background: rgba(153, 69, 255, 0.1);
-            border: 1px solid rgba(153, 69, 255, 0.2);
-            border-radius: 50px;
-            display: inline-block;
-            width: auto;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .pricing {
-            text-align: center;
-        }
-
         .price-features {
             list-style: none;
             margin-bottom: 2rem;
@@ -1077,6 +1048,297 @@
                 font-size: 0.8rem;
             }
         }
+
+        /* Trial Banner Styles */
+        .trial-banner {
+            background: linear-gradient(135deg, rgba(255, 0, 255, 0.15), rgba(0, 212, 255, 0.15));
+            border: 2px solid var(--secondary);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .trial-content {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .trial-badge {
+            background: var(--gradient-secondary);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .trial-info {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .trial-info h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .trial-info p {
+            color: var(--text-muted);
+        }
+
+        .price-crypto {
+            font-size: 0.9rem;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        /* Currency Toggle in Modal */
+        .currency-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .currency-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .currency-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .currency-btn.active {
+            background: var(--gradient-primary);
+            border-color: transparent;
+            color: var(--bg-dark);
+        }
+
+        .currency-btn.usdc.active {
+            background: linear-gradient(135deg, #2775CA, #4A90D9);
+        }
+
+        /* Config Section Styles */
+        .config-section {
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 212, 255, 0.03) 50%, transparent 100%);
+        }
+
+        .config-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .config-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .config-card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 2rem;
+        }
+
+        .config-card h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .config-desc {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .config-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .config-group label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .config-input {
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .config-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .checkbox-group {
+            flex-direction: row;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .checkbox-label input {
+            display: none;
+        }
+
+        .checkmark {
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .checkbox-label input:checked + .checkmark {
+            background: var(--gradient-primary);
+            border-color: transparent;
+        }
+
+        .checkbox-label input:checked + .checkmark::after {
+            content: '✓';
+            color: var(--bg-dark);
+            font-weight: bold;
+        }
+
+        .config-save-btn {
+            margin-top: 1.5rem;
+            width: 100%;
+        }
+
+        .config-saved {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            color: var(--primary);
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .config-preview {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 2rem;
+        }
+
+        .config-preview h4 {
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 1rem;
+        }
+
+        .config-preview pre {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: var(--primary);
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+        }
+
+        /* Trial Modal Styles */
+        .trial-form {
+            margin-bottom: 1.5rem;
+        }
+
+        .trial-features {
+            background: rgba(255, 0, 255, 0.1);
+            border: 1px solid rgba(255, 0, 255, 0.2);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .trial-features h4 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .trial-features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .trial-features li {
+            padding: 0.5rem 0;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .trial-features li::before {
+            content: '✓';
+            color: var(--secondary);
+        }
     </style>
 </head>
 <body>
@@ -1090,6 +1352,7 @@
                 <li><a href="#features">Features</a></li>
                 <li><a href="#how">How It Works</a></li>
                 <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#configure">Configure</a></li>
                 <li><a href="#faq">FAQ</a></li>
             </ul>
         </div>
@@ -1251,15 +1514,26 @@
 
     <section class="pricing" id="pricing">
         <h2 class="section-title">Choose Your Plan</h2>
-        <p class="section-subtitle">One-time purchase, no recurring fees</p>
-        <p class="sol-rate-note">💰 SOL prices based on ~$122/SOL rate. Send exact SOL amount shown in payment.</p>
+        <p class="section-subtitle">One-time purchase, no recurring fees • Pay with SOL or USDC</p>
+        
+        <!-- Free Trial Banner -->
+        <div class="trial-banner">
+            <div class="trial-content">
+                <span class="trial-badge">🎁 FREE</span>
+                <div class="trial-info">
+                    <h3>Try Before You Buy - 3 Day Free Trial</h3>
+                    <p>Test the bot with limited features. No payment required!</p>
+                </div>
+                <button class="btn btn-primary" onclick="openTrialModal()">Start Free Trial →</button>
+            </div>
+        </div>
         
         <div class="pricing-grid">
             <div class="price-card">
                 <h3 class="price-name">Standard</h3>
                 <p class="price-duration">30 Days Access</p>
                 <div class="price-amount">$44<span>/once</span></div>
-                <div class="price-sol">≈ 0.36 SOL</div>
+                <div class="price-crypto">≈ 0.23 SOL or 44 USDC</div>
                 <ul class="price-features">
                     <li>Full bot access for 30 days</li>
                     <li>Windows & Mac support</li>
@@ -1268,14 +1542,14 @@
                     <li>Stop loss protection</li>
                     <li>Email support</li>
                 </ul>
-                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.36', '$44')">Get Standard</button>
+                <button class="btn btn-secondary" onclick="openPayment('Standard', '0.23', '44', '$44')">Get Standard</button>
             </div>
             
             <div class="price-card popular">
                 <h3 class="price-name">Pro</h3>
                 <p class="price-duration">90 Days Access</p>
                 <div class="price-amount">$125<span>/once</span></div>
-                <div class="price-sol">≈ 1.02 SOL</div>
+                <div class="price-crypto">≈ 0.65 SOL or 125 USDC</div>
                 <ul class="price-features">
                     <li>Everything in Standard</li>
                     <li>90 days access (save 33%)</li>
@@ -1284,14 +1558,14 @@
                     <li>Custom profit targets</li>
                     <li>Telegram support group</li>
                 </ul>
-                <button class="btn btn-primary" onclick="openPayment('Pro', '1.02', '$125')">Get Pro</button>
+                <button class="btn btn-primary" onclick="openPayment('Pro', '0.65', '125', '$125')">Get Pro</button>
             </div>
             
             <div class="price-card">
                 <h3 class="price-name">Lifetime</h3>
                 <p class="price-duration">Forever Access</p>
                 <div class="price-amount">$449<span>/once</span></div>
-                <div class="price-sol">≈ 3.68 SOL</div>
+                <div class="price-crypto">≈ 2.34 SOL or 449 USDC</div>
                 <ul class="price-features">
                     <li>Everything in Pro</li>
                     <li>Lifetime access forever</li>
@@ -1300,7 +1574,87 @@
                     <li>Private Discord channel</li>
                     <li>Feature request priority</li>
                 </ul>
-                <button class="btn btn-secondary" onclick="openPayment('Lifetime', '3.68', '$449')">Get Lifetime</button>
+                <button class="btn btn-secondary" onclick="openPayment('Lifetime', '2.34', '449', '$449')">Get Lifetime</button>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Bot Configuration Section -->
+    <section class="config-section" id="configure">
+        <h2 class="section-title">Configure Your Bot</h2>
+        <p class="section-subtitle">Customize your trading strategy before download</p>
+        
+        <div class="config-container">
+            <div class="config-card">
+                <h3>⚙️ Bot Configuration</h3>
+                <p class="config-desc">Set up your bot parameters. These settings will be saved and applied to your bot.</p>
+                
+                <div class="config-form">
+                    <div class="config-group">
+                        <label for="configBuyAmount">Buy Amount (SOL)</label>
+                        <input type="number" id="configBuyAmount" class="config-input" value="0.1" step="0.01" min="0.01" max="10">
+                        <span class="config-hint">Amount of SOL to spend per trade (0.01 - 10)</span>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="configProfitTarget">Profit Target (x)</label>
+                        <input type="number" id="configProfitTarget" class="config-input" value="6" step="0.5" min="1.5" max="100">
+                        <span class="config-hint">Take profit multiplier (e.g., 6 = 6x or 500% profit)</span>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="configStopLoss">Stop Loss (%)</label>
+                        <input type="number" id="configStopLoss" class="config-input" value="50" step="5" min="10" max="90">
+                        <span class="config-hint">Sell if price drops by this percentage</span>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="configTrailingStop">Trailing Stop (%)</label>
+                        <input type="number" id="configTrailingStop" class="config-input" value="20" step="5" min="5" max="50">
+                        <span class="config-hint">After hitting profit target, trail by this %</span>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label for="configMaxPositions">Max Open Positions</label>
+                        <input type="number" id="configMaxPositions" class="config-input" value="5" step="1" min="1" max="20">
+                        <span class="config-hint">Maximum tokens to hold at once</span>
+                    </div>
+                    
+                    <div class="config-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="configAutoSell" checked>
+                            <span class="checkmark"></span>
+                            Enable Auto-Sell
+                        </label>
+                        <span class="config-hint">Automatically sell based on profit/loss targets</span>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary config-save-btn" onclick="saveConfig()">
+                    💾 Save Configuration
+                </button>
+                
+                <div id="configSaved" class="config-saved" style="display: none;">
+                    ✅ Configuration saved! These settings will be applied to your bot.
+                </div>
+            </div>
+            
+            <div class="config-preview">
+                <h4>📋 Your Config Preview</h4>
+                <pre id="configPreview">
+# ZOOT SNIPER BOT CONFIG
+# Generated from web configurator
+
+BUY_AMOUNT=0.1
+PROFIT_TARGET=6
+STOP_LOSS=50
+TRAILING_STOP=20
+MAX_POSITIONS=5
+AUTO_SELL=true
+                </pre>
+                <button class="btn btn-secondary" onclick="copyConfig()">
+                    📋 Copy Config
+                </button>
             </div>
         </div>
     </section>
@@ -1388,21 +1742,31 @@
             <span class="modal-close" onclick="closePayment()">&times;</span>
             <div class="modal-header">
                 <div class="solana-icon">◎</div>
-                <h2>Pay with <span style="background: linear-gradient(135deg, #9945FF, #14F195); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Solana</span></h2>
+                <h2>Pay with <span style="background: linear-gradient(135deg, #9945FF, #14F195); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Crypto</span></h2>
             </div>
             
             <div class="plan-info">
                 <span class="plan-name" id="modalPlanName">Pro Plan</span>
-                <span class="plan-price" id="modalPlanPrice">$99</span>
+                <span class="plan-price" id="modalPlanPrice">$125</span>
+            </div>
+            
+            <!-- Currency Toggle -->
+            <div class="currency-toggle">
+                <button class="currency-btn sol active" onclick="switchCurrency('sol')">
+                    <span>◎</span> SOL
+                </button>
+                <button class="currency-btn usdc" onclick="switchCurrency('usdc')">
+                    <span>$</span> USDC
+                </button>
             </div>
             
             <div class="payment-amount">
                 <span class="sol-label">Send exactly:</span>
-                <span class="sol-amount" id="modalSolAmount">0.5 SOL</span>
+                <span class="sol-amount" id="modalCryptoAmount">0.65 SOL</span>
             </div>
             
             <div class="wallet-address-container">
-                <label>To this Solana wallet address:</label>
+                <label id="walletLabel">To this Solana wallet address:</label>
                 <div class="wallet-address" id="walletAddress">
                     YOUR_SOLANA_WALLET_ADDRESS_HERE
                 </div>
@@ -1419,7 +1783,7 @@
             <div class="payment-steps">
                 <div class="payment-step">
                     <span class="step-num">1</span>
-                    <span>Send the exact SOL amount to the address above</span>
+                    <span id="stepText1">Send the exact SOL amount to the address above</span>
                 </div>
                 <div class="payment-step">
                     <span class="step-num">2</span>
@@ -1459,10 +1823,58 @@
             </div>
         </div>
     </div>
+    
+    <!-- Trial Modal -->
+    <div id="trialModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeTrialModal()">&times;</span>
+            <div class="modal-header">
+                <div class="solana-icon" style="background: var(--gradient-secondary); -webkit-background-clip: text;">🎁</div>
+                <h2>Start Your <span style="background: var(--gradient-secondary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Free Trial</span></h2>
+            </div>
+            
+            <div class="trial-features">
+                <h4>3-Day Free Trial Includes:</h4>
+                <ul>
+                    <li>Full bot access for 3 days</li>
+                    <li>Windows & Mac support</li>
+                    <li>Auto buy on bonding curve</li>
+                    <li>Limited to 5 trades per day</li>
+                    <li>Basic stop loss protection</li>
+                </ul>
+            </div>
+            
+            <div class="trial-form">
+                <label for="trialEmail">Enter your email to receive the trial license:</label>
+                <input type="email" id="trialEmail" class="tx-input" placeholder="your@email.com">
+                <button class="verify-btn" onclick="submitTrial()" style="background: var(--gradient-secondary);">
+                    <span id="trialBtnText">🚀 Get Free Trial</span>
+                </button>
+            </div>
+            
+            <!-- Trial Success Message -->
+            <div class="tx-success" id="trialSuccess" style="display: none;">
+                <div class="success-icon" style="background: var(--gradient-secondary);">✓</div>
+                <h3>Trial Activated!</h3>
+                <p>Check your email for the trial license key and download instructions.</p>
+                <button class="btn btn-secondary" onclick="closeTrialModal()">Close</button>
+            </div>
+            
+            <p class="modal-note">
+                🔒 No payment required. No credit card needed. Just your email!
+            </p>
+        </div>
+    </div>
 
     <script>
-        // Payment wallet address
+        // Payment wallet addresses
         const PAYMENT_WALLET = '2LK7yxZsy6YVCkFQ4PrL644ve1fgRj5FuDexj5JgS753';
+        // USDC uses the same wallet on Solana network
+        const USDC_WALLET = '2LK7yxZsy6YVCkFQ4PrL644ve1fgRj5FuDexj5JgS753';
+        
+        // Current state
+        let currentPlan = {};
+        let currentCurrency = 'sol';
         
         function toggleFaq(element) {
             const item = element.parentElement;
@@ -1470,11 +1882,9 @@
         }
 
         function switchLang(lang) {
-            // Update buttons
             document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
-            // Switch steps content
             if (lang === 'en') {
                 document.getElementById('steps-en').style.display = 'flex';
                 document.getElementById('steps-ht').style.display = 'none';
@@ -1503,7 +1913,8 @@
         }
 
         function copyAddress() {
-            navigator.clipboard.writeText(PAYMENT_WALLET).then(() => {
+            const wallet = currentCurrency === 'sol' ? PAYMENT_WALLET : USDC_WALLET;
+            navigator.clipboard.writeText(wallet).then(() => {
                 document.getElementById('copyText').textContent = '✓ Copied!';
                 setTimeout(() => {
                     document.getElementById('copyText').textContent = '📋 Copy Address';
@@ -1513,28 +1924,62 @@
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('paymentModal');
-            if (event.target === modal) {
-                closePayment();
-            }
+            const paymentModal = document.getElementById('paymentModal');
+            const trialModal = document.getElementById('trialModal');
+            if (event.target === paymentModal) closePayment();
+            if (event.target === trialModal) closeTrialModal();
         }
 
         // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closePayment();
+                closeTrialModal();
             }
         });
 
-        // Current plan being purchased
-        let currentPlan = {};
+        // Currency switching
+        function switchCurrency(currency) {
+            currentCurrency = currency;
+            
+            // Update buttons
+            document.querySelectorAll('.currency-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.currency-btn.${currency}`).classList.add('active');
+            
+            // Update displayed amount and labels
+            if (currency === 'sol') {
+                document.getElementById('modalCryptoAmount').textContent = currentPlan.solAmount + ' SOL';
+                document.getElementById('walletLabel').textContent = 'To this Solana wallet address:';
+                document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
+                document.getElementById('stepText1').textContent = 'Send the exact SOL amount to the address above';
+                document.getElementById('modalCryptoAmount').style.background = 'linear-gradient(135deg, #9945FF, #14F195)';
+            } else {
+                document.getElementById('modalCryptoAmount').textContent = currentPlan.usdcAmount + ' USDC';
+                document.getElementById('walletLabel').textContent = 'To this Solana wallet address (USDC SPL):';
+                document.getElementById('walletAddress').textContent = USDC_WALLET;
+                document.getElementById('stepText1').textContent = 'Send the exact USDC amount to the address above';
+                document.getElementById('modalCryptoAmount').style.background = 'linear-gradient(135deg, #2775CA, #4A90D9)';
+            }
+            
+            // Update QR code
+            const wallet = currency === 'sol' ? PAYMENT_WALLET : USDC_WALLET;
+            const amount = currency === 'sol' ? currentPlan.solAmount : currentPlan.usdcAmount;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${wallet}?amount=${amount}&bgcolor=0a0a0f&color=00ff88`;
+            document.getElementById('qrCode').src = qrUrl;
+        }
 
-        function openPayment(planName, solAmount, usdPrice) {
-            currentPlan = { planName, solAmount, usdPrice };
+        function openPayment(planName, solAmount, usdcAmount, usdPrice) {
+            currentPlan = { planName, solAmount, usdcAmount, usdPrice };
+            currentCurrency = 'sol';
+            
             document.getElementById('modalPlanName').textContent = planName + ' Plan';
             document.getElementById('modalPlanPrice').textContent = usdPrice;
-            document.getElementById('modalSolAmount').textContent = solAmount + ' SOL';
+            document.getElementById('modalCryptoAmount').textContent = solAmount + ' SOL';
             document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
+            
+            // Reset currency buttons
+            document.querySelectorAll('.currency-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('.currency-btn.sol').classList.add('active');
             
             // Reset form
             document.getElementById('txIdInput').value = '';
@@ -1542,6 +1987,7 @@
             document.getElementById('txVerificationForm').style.display = 'block';
             document.getElementById('txSuccess').style.display = 'none';
             document.getElementById('verifyBtnText').textContent = '🔍 Verify Payment';
+            document.getElementById('modalCryptoAmount').style.background = 'linear-gradient(135deg, #9945FF, #14F195)';
             
             // Generate QR code
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${PAYMENT_WALLET}?amount=${solAmount}&bgcolor=0a0a0f&color=00ff88`;
@@ -1565,28 +2011,25 @@
                 return;
             }
             
-            // Update button to show loading
-            const btn = document.querySelector('.verify-btn');
+            const btn = document.querySelector('#txVerificationForm .verify-btn');
             btn.disabled = true;
             document.getElementById('verifyBtnText').textContent = '⏳ Verifying...';
             
-            // Prepare payment data
             const paymentData = {
                 txId: txId,
                 email: email,
                 plan: currentPlan.planName,
-                solAmount: currentPlan.solAmount,
+                currency: currentCurrency.toUpperCase(),
+                amount: currentCurrency === 'sol' ? currentPlan.solAmount + ' SOL' : currentPlan.usdcAmount + ' USDC',
                 usdPrice: currentPlan.usdPrice,
                 timestamp: new Date().toISOString(),
-                wallet: PAYMENT_WALLET
+                wallet: currentCurrency === 'sol' ? PAYMENT_WALLET : USDC_WALLET
             };
             
-            // Store locally (for seller to see if they check localStorage)
             const payments = JSON.parse(localStorage.getItem('zoot_payments') || '[]');
             payments.push(paymentData);
             localStorage.setItem('zoot_payments', JSON.stringify(payments));
             
-            // Send to Formspree for email notification
             try {
                 await fetch('https://formspree.io/f/mvzozyeb', {
                     method: 'POST',
@@ -1594,14 +2037,12 @@
                     body: JSON.stringify(paymentData)
                 });
                 
-                // Show success
                 document.getElementById('txVerificationForm').style.display = 'none';
                 document.getElementById('submittedTxId').textContent = txId.substring(0, 20) + '...';
                 document.getElementById('txSuccess').style.display = 'block';
                 
             } catch (error) {
                 console.error('Submission error:', error);
-                // Still show success (the local storage backup worked)
                 document.getElementById('txVerificationForm').style.display = 'none';
                 document.getElementById('submittedTxId').textContent = txId.substring(0, 20) + '...';
                 document.getElementById('txSuccess').style.display = 'block';
@@ -1610,11 +2051,152 @@
             btn.disabled = false;
         }
 
-        // Seller function to view payments (type viewPayments() in console)
+        // Trial Modal Functions
+        function openTrialModal() {
+            document.getElementById('trialEmail').value = '';
+            document.getElementById('trialSuccess').style.display = 'none';
+            document.querySelector('.trial-form').style.display = 'block';
+            document.getElementById('trialBtnText').textContent = '🚀 Get Free Trial';
+            document.getElementById('trialModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeTrialModal() {
+            document.getElementById('trialModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        async function submitTrial() {
+            const email = document.getElementById('trialEmail').value.trim();
+            
+            if (!email || !email.includes('@')) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            const btn = document.querySelector('.trial-form .verify-btn');
+            btn.disabled = true;
+            document.getElementById('trialBtnText').textContent = '⏳ Processing...';
+            
+            const trialData = {
+                email: email,
+                type: 'FREE_TRIAL',
+                duration: '3 days',
+                timestamp: new Date().toISOString()
+            };
+            
+            const trials = JSON.parse(localStorage.getItem('zoot_trials') || '[]');
+            trials.push(trialData);
+            localStorage.setItem('zoot_trials', JSON.stringify(trials));
+            
+            try {
+                await fetch('https://formspree.io/f/mvzozyeb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(trialData)
+                });
+                
+                document.querySelector('.trial-form').style.display = 'none';
+                document.getElementById('trialSuccess').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Submission error:', error);
+                document.querySelector('.trial-form').style.display = 'none';
+                document.getElementById('trialSuccess').style.display = 'block';
+            }
+            
+            btn.disabled = false;
+        }
+
+        // Bot Configuration Functions
+        function updateConfigPreview() {
+            const buyAmount = document.getElementById('configBuyAmount').value;
+            const profitTarget = document.getElementById('configProfitTarget').value;
+            const stopLoss = document.getElementById('configStopLoss').value;
+            const trailingStop = document.getElementById('configTrailingStop').value;
+            const maxPositions = document.getElementById('configMaxPositions').value;
+            const autoSell = document.getElementById('configAutoSell').checked;
+            
+            const configText = `# ZOOT SNIPER BOT CONFIG
+# Generated from web configurator
+
+BUY_AMOUNT=${buyAmount}
+PROFIT_TARGET=${profitTarget}
+STOP_LOSS=${stopLoss}
+TRAILING_STOP=${trailingStop}
+MAX_POSITIONS=${maxPositions}
+AUTO_SELL=${autoSell}`;
+            
+            document.getElementById('configPreview').textContent = configText;
+        }
+
+        function saveConfig() {
+            const config = {
+                buyAmount: document.getElementById('configBuyAmount').value,
+                profitTarget: document.getElementById('configProfitTarget').value,
+                stopLoss: document.getElementById('configStopLoss').value,
+                trailingStop: document.getElementById('configTrailingStop').value,
+                maxPositions: document.getElementById('configMaxPositions').value,
+                autoSell: document.getElementById('configAutoSell').checked,
+                savedAt: new Date().toISOString()
+            };
+            
+            localStorage.setItem('zoot_config', JSON.stringify(config));
+            
+            document.getElementById('configSaved').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('configSaved').style.display = 'none';
+            }, 3000);
+            
+            updateConfigPreview();
+        }
+
+        function copyConfig() {
+            const configText = document.getElementById('configPreview').textContent;
+            navigator.clipboard.writeText(configText).then(() => {
+                alert('Configuration copied to clipboard!');
+            });
+        }
+
+        function loadSavedConfig() {
+            const saved = localStorage.getItem('zoot_config');
+            if (saved) {
+                const config = JSON.parse(saved);
+                document.getElementById('configBuyAmount').value = config.buyAmount || 0.1;
+                document.getElementById('configProfitTarget').value = config.profitTarget || 6;
+                document.getElementById('configStopLoss').value = config.stopLoss || 50;
+                document.getElementById('configTrailingStop').value = config.trailingStop || 20;
+                document.getElementById('configMaxPositions').value = config.maxPositions || 5;
+                document.getElementById('configAutoSell').checked = config.autoSell !== false;
+                updateConfigPreview();
+            }
+        }
+
+        // Add event listeners for config inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedConfig();
+            
+            const configInputs = ['configBuyAmount', 'configProfitTarget', 'configStopLoss', 'configTrailingStop', 'configMaxPositions', 'configAutoSell'];
+            configInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', updateConfigPreview);
+                    el.addEventListener('change', updateConfigPreview);
+                }
+            });
+        });
+
+        // Seller functions
         function viewPayments() {
             const payments = JSON.parse(localStorage.getItem('zoot_payments') || '[]');
             console.table(payments);
             return payments;
+        }
+
+        function viewTrials() {
+            const trials = JSON.parse(localStorage.getItem('zoot_trials') || '[]');
+            console.table(trials);
+            return trials;
         }
     </script>
 </body>
