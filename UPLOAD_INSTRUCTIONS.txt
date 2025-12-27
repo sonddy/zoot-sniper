@@ -1,0 +1,122 @@
+═══════════════════════════════════════════════════════════════════════════════
+              📤 HOW TO UPLOAD TO GITHUB & HOST FOR FREE
+═══════════════════════════════════════════════════════════════════════════════
+
+Your GitHub: https://github.com/sonddy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 1: UPLOAD MANUALLY (Easiest)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Go to: https://github.com/new
+
+2. Repository name: zoot-sniper
+
+3. Make it PUBLIC
+
+4. Click "Create repository"
+
+5. Click "uploading an existing file"
+
+6. Drag and drop: index.html (from this folder)
+
+7. Click "Commit changes"
+
+8. Go to: Settings → Pages
+
+9. Source: Deploy from branch
+   Branch: main
+   Folder: / (root)
+
+10. Click Save
+
+11. Wait 1-2 minutes, your site is live at:
+    https://sonddy.github.io/zoot-sniper/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 2: USE GIT COMMAND LINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open PowerShell in this folder and run:
+
+git init
+git add index.html
+git commit -m "Zoot Sniper Bot sales page"
+git branch -M main
+git remote add origin https://github.com/sonddy/zoot-sniper.git
+git push -u origin main
+
+Then enable GitHub Pages as described above.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 3: USE YOUR EXISTING REPO (zoot-admin)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You already have a repo called "zoot-admin" with HTML.
+You could upload this index.html there instead!
+
+1. Go to: https://github.com/sonddy/zoot-admin
+
+2. Click "Add file" → "Upload files"
+
+3. Upload index.html
+
+4. Enable GitHub Pages in Settings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CUSTOM DOMAIN (Optional)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Want a custom domain like zootsniper.com?
+
+1. Buy a domain from Namecheap, GoDaddy, etc (~$10/year)
+
+2. In GitHub Pages settings, enter your domain
+
+3. Add a CNAME file to your repo with just: zootsniper.com
+
+4. In your domain's DNS settings, add:
+   - CNAME record: www → sonddy.github.io
+   - A records pointing to GitHub's IPs:
+     185.199.108.153
+     185.199.109.153
+     185.199.110.153
+     185.199.111.153
+
+5. Wait for DNS to propagate (up to 24 hours)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT YOU NEED TO CHANGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In index.html, update:
+
+1. Telegram link (search for @ZootSniper):
+   → Change to your actual Telegram username
+
+2. Twitter link (if you have one):
+   → Change to your Twitter handle
+
+3. Prices (if you want different pricing):
+   → $49 / $99 / $199 are recommended but adjust as needed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT STEPS AFTER UPLOADING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Create a Telegram account/channel for support
+   → This is where customers will contact you
+
+2. Set up a payment method:
+   → PayPal, Wise, or crypto (BTC, ETH, SOL)
+   → Or use Gumroad/Whop for automated payments
+
+3. Start marketing:
+   → Post on Crypto Twitter
+   → Share in Telegram groups
+   → Make demo videos
+
+═══════════════════════════════════════════════════════════════════════════════
+                              Good luck! 🚀
+═══════════════════════════════════════════════════════════════════════════════
+

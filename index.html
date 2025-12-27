@@ -613,6 +613,40 @@
             color: var(--primary);
         }
 
+        .lang-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+        }
+
+        .lang-btn {
+            padding: 0.75rem 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .lang-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .lang-btn.active {
+            background: var(--gradient-primary);
+            border-color: transparent;
+            color: var(--bg-dark);
+            box-shadow: var(--glow-primary);
+        }
+
         @media (max-width: 768px) {
             .nav-links {
                 display: none;
@@ -634,6 +668,11 @@
 
             .price-card.popular:hover {
                 transform: translateY(-10px);
+            }
+
+            .lang-toggle {
+                flex-direction: column;
+                align-items: center;
             }
         }
     </style>
@@ -727,7 +766,14 @@
         <h2 class="section-title">How It Works</h2>
         <p class="section-subtitle">Start trading in under 5 minutes</p>
         
-        <div class="steps">
+        <!-- Language Toggle -->
+        <div class="lang-toggle">
+            <button class="lang-btn active" onclick="switchLang('en')">🇺🇸 English</button>
+            <button class="lang-btn" onclick="switchLang('ht')">🇭🇹 Kreyòl Ayisyen</button>
+        </div>
+        
+        <!-- English Version -->
+        <div class="steps" id="steps-en">
             <div class="step">
                 <div class="step-number">1</div>
                 <div class="step-content">
@@ -758,9 +804,46 @@
             </div>
         </div>
 
-        <div class="warning-banner">
+        <!-- Haitian Creole Version -->
+        <div class="steps" id="steps-ht" style="display: none;">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Kreye yon Bous Pump Portal</h3>
+                    <p>Kreye yon "Lightning Wallet" sou pumpportal.fun. Sa ap ba ou yon bous ki rapid pou fè tranzaksyon sou pump.fun.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Mete Lajan nan Bous Ou</h3>
+                    <p>Voye SOL nan nouvo bous ou a. Kòmanse ak 0.5-1 SOL pou teste. Chak tranzaksyon itilize anviwon 0.1 SOL pa defo.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Konfigire Bot la</h3>
+                    <p>Ouvri config.txt, kole kle prive ou ak kle lisans ou. Chwazi kantite lajan ou vle achte ak objektif benefis ou.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h3>Kouri & Fè Pwofi</h3>
+                    <p>Doub-klike sou fichye a. Bot la ap kòmanse siveye pump.fun epi li ap fè tranzaksyon otomatik 24/7.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning Banner - Both Languages -->
+        <div class="warning-banner" id="warning-en">
             <h4>⚠️ Risk Warning</h4>
             <p>Trading memecoins is extremely risky. Most tokens go to zero. Only invest what you can afford to lose completely. Past performance does not guarantee future results.</p>
+        </div>
+        <div class="warning-banner" id="warning-ht" style="display: none;">
+            <h4>⚠️ Avètisman Risk</h4>
+            <p>Fè komès memecoin trè riske. Pifò token yo ale nan zewo. Sèlman envesti sa ou ka pèdi nèt. Pèfòmans pase pa garanti rezilta nan lavni.</p>
         </div>
     </section>
 
@@ -897,6 +980,25 @@
         function toggleFaq(element) {
             const item = element.parentElement;
             item.classList.toggle('active');
+        }
+
+        function switchLang(lang) {
+            // Update buttons
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Switch steps content
+            if (lang === 'en') {
+                document.getElementById('steps-en').style.display = 'flex';
+                document.getElementById('steps-ht').style.display = 'none';
+                document.getElementById('warning-en').style.display = 'block';
+                document.getElementById('warning-ht').style.display = 'none';
+            } else {
+                document.getElementById('steps-en').style.display = 'none';
+                document.getElementById('steps-ht').style.display = 'flex';
+                document.getElementById('warning-en').style.display = 'none';
+                document.getElementById('warning-ht').style.display = 'block';
+            }
         }
 
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
