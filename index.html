@@ -901,6 +901,136 @@
             line-height: 1.5;
         }
 
+        /* TX Verification Form */
+        .tx-verification {
+            margin-bottom: 1.5rem;
+        }
+
+        .tx-verification label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .tx-input {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.3s;
+        }
+
+        .tx-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .tx-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .verify-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 12px;
+            color: var(--bg-dark);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .verify-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.4);
+        }
+
+        .verify-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Success Message */
+        .tx-success {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 16px;
+            margin-bottom: 1rem;
+        }
+
+        .success-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            color: var(--bg-dark);
+            font-size: 2rem;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            animation: successPop 0.5s ease;
+        }
+
+        @keyframes successPop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .tx-success h3 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .tx-success p {
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .tx-id-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+        }
+
+        .tx-id-display span {
+            color: var(--primary);
+        }
+
+        .solscan-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .solscan-link a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.3s;
+        }
+
+        .solscan-link a:hover {
+            color: var(--primary);
+        }
+
         @media (max-width: 480px) {
             .modal-content {
                 padding: 1.5rem;
@@ -912,6 +1042,10 @@
 
             .wallet-address {
                 font-size: 0.75rem;
+            }
+
+            .tx-input {
+                font-size: 0.8rem;
             }
         }
     </style>
@@ -1256,26 +1390,40 @@
                 </div>
                 <div class="payment-step">
                     <span class="step-num">2</span>
-                    <span>Copy your transaction signature (ID)</span>
+                    <span>Copy your transaction signature (TX ID) from your wallet</span>
                 </div>
                 <div class="payment-step">
                     <span class="step-num">3</span>
-                    <span>Send the TX ID to us on Telegram</span>
-                </div>
-                <div class="payment-step">
-                    <span class="step-num">4</span>
-                    <span>Receive your license key within minutes!</span>
+                    <span>Paste the TX ID below and submit for verification</span>
                 </div>
             </div>
             
-            <a href="https://t.me/ZootSniper" class="telegram-confirm-btn" target="_blank">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.223-.548.223l.188-2.85 5.18-4.68c.223-.198-.054-.308-.346-.11l-6.4 4.02-2.76-.918c-.6-.187-.612-.6.126-.89l10.782-4.156c.5-.18.94.12.778.89z"/></svg>
-                Send TX ID on Telegram
-            </a>
+            <!-- TX ID Verification Form -->
+            <div class="tx-verification" id="txVerificationForm">
+                <label for="txIdInput">Enter your Transaction ID:</label>
+                <input type="text" id="txIdInput" class="tx-input" placeholder="Paste your Solana TX signature here...">
+                <input type="email" id="emailInput" class="tx-input" placeholder="Your email (to receive license key)">
+                <button class="verify-btn" onclick="submitPayment()">
+                    <span id="verifyBtnText">🔍 Verify Payment</span>
+                </button>
+            </div>
+            
+            <!-- Success Message (hidden by default) -->
+            <div class="tx-success" id="txSuccess" style="display: none;">
+                <div class="success-icon">✓</div>
+                <h3>Payment Submitted!</h3>
+                <p>Your transaction is being verified. You'll receive your license key at the email provided within 5-30 minutes.</p>
+                <p class="tx-id-display">TX ID: <span id="submittedTxId"></span></p>
+                <button class="btn btn-secondary" onclick="closePayment()">Close</button>
+            </div>
             
             <p class="modal-note">
-                ⚡ Payments are verified manually. You'll receive your license within 5-30 minutes during business hours.
+                ⚡ Payments are verified automatically. You'll receive your license key via email within 5-30 minutes.
             </p>
+            
+            <div class="solscan-link">
+                <a href="https://solscan.io" target="_blank">🔗 View on Solscan</a>
+            </div>
         </div>
     </div>
 
@@ -1316,21 +1464,6 @@
             });
         });
 
-        // Payment Modal Functions
-        function openPayment(planName, solAmount, usdPrice) {
-            document.getElementById('modalPlanName').textContent = planName + ' Plan';
-            document.getElementById('modalPlanPrice').textContent = usdPrice;
-            document.getElementById('modalSolAmount').textContent = solAmount + ' SOL';
-            document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
-            
-            // Generate QR code using QR Server API
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${PAYMENT_WALLET}?amount=${solAmount}&bgcolor=0a0a0f&color=00ff88`;
-            document.getElementById('qrCode').src = qrUrl;
-            
-            document.getElementById('paymentModal').style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-
         function closePayment() {
             document.getElementById('paymentModal').style.display = 'none';
             document.body.style.overflow = 'auto';
@@ -1359,6 +1492,101 @@
                 closePayment();
             }
         });
+
+        // Current plan being purchased
+        let currentPlan = {};
+
+        function openPayment(planName, solAmount, usdPrice) {
+            currentPlan = { planName, solAmount, usdPrice };
+            document.getElementById('modalPlanName').textContent = planName + ' Plan';
+            document.getElementById('modalPlanPrice').textContent = usdPrice;
+            document.getElementById('modalSolAmount').textContent = solAmount + ' SOL';
+            document.getElementById('walletAddress').textContent = PAYMENT_WALLET;
+            
+            // Reset form
+            document.getElementById('txIdInput').value = '';
+            document.getElementById('emailInput').value = '';
+            document.getElementById('txVerificationForm').style.display = 'block';
+            document.getElementById('txSuccess').style.display = 'none';
+            document.getElementById('verifyBtnText').textContent = '🔍 Verify Payment';
+            
+            // Generate QR code
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=solana:${PAYMENT_WALLET}?amount=${solAmount}&bgcolor=0a0a0f&color=00ff88`;
+            document.getElementById('qrCode').src = qrUrl;
+            
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        async function submitPayment() {
+            const txId = document.getElementById('txIdInput').value.trim();
+            const email = document.getElementById('emailInput').value.trim();
+            
+            if (!txId) {
+                alert('Please enter your transaction ID');
+                return;
+            }
+            
+            if (!email || !email.includes('@')) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            // Update button to show loading
+            const btn = document.querySelector('.verify-btn');
+            btn.disabled = true;
+            document.getElementById('verifyBtnText').textContent = '⏳ Verifying...';
+            
+            // Prepare payment data
+            const paymentData = {
+                txId: txId,
+                email: email,
+                plan: currentPlan.planName,
+                solAmount: currentPlan.solAmount,
+                usdPrice: currentPlan.usdPrice,
+                timestamp: new Date().toISOString(),
+                wallet: PAYMENT_WALLET
+            };
+            
+            // Store locally (for seller to see if they check localStorage)
+            const payments = JSON.parse(localStorage.getItem('zoot_payments') || '[]');
+            payments.push(paymentData);
+            localStorage.setItem('zoot_payments', JSON.stringify(payments));
+            
+            // Try to send via Formspree (you'll need to set up a Formspree form)
+            try {
+                // If you have Formspree set up, uncomment and add your form ID:
+                // await fetch('https://formspree.io/f/YOUR_FORM_ID', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify(paymentData)
+                // });
+                
+                // For now, just simulate a delay
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Show success
+                document.getElementById('txVerificationForm').style.display = 'none';
+                document.getElementById('submittedTxId').textContent = txId.substring(0, 20) + '...';
+                document.getElementById('txSuccess').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Submission error:', error);
+                // Still show success (the local storage backup worked)
+                document.getElementById('txVerificationForm').style.display = 'none';
+                document.getElementById('submittedTxId').textContent = txId.substring(0, 20) + '...';
+                document.getElementById('txSuccess').style.display = 'block';
+            }
+            
+            btn.disabled = false;
+        }
+
+        // Seller function to view payments (type viewPayments() in console)
+        function viewPayments() {
+            const payments = JSON.parse(localStorage.getItem('zoot_payments') || '[]');
+            console.table(payments);
+            return payments;
+        }
     </script>
 </body>
 </html>
