@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     selectImageFile: () => ipcRenderer.invoke('select-image-file'),
 
+    // Trade journal (Stats panel)
+    getTradeStats: () => ipcRenderer.invoke('get-trade-stats'),
+    getTradeHistory: (limit) => ipcRenderer.invoke('get-trade-history', limit),
+
     // Event listeners
     onBotLog: (callback) => {
         ipcRenderer.on('bot-log', (event, log) => callback(log));

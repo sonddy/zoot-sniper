@@ -103,6 +103,11 @@ function showPage(pageId) {
     navButtons.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.page === pageId);
     });
+
+    // Lazy-refresh the Stats page when navigated to (cheap; reads a JSONL).
+    if (pageId === 'stats' && typeof refreshStatsPage === 'function') {
+        refreshStatsPage();
+    }
 }
 
 // Make showPage globally accessible
@@ -2191,6 +2196,17 @@ function renderFeedTokens() {
         return;
     }
     
+    // After we paint, fire off main-process image loads for any token
+    // we have a URL for. loadImageAsBase64 caches per-URL so this is cheap
+    // even when renderFeedTokens runs every time a new token arrives.
+    setTimeout(() => {
+        for (const t of feedTokens) {
+            if (t.image && t.image.length > 10) {
+                loadFeedImage(t.mint, t.image);
+            }
+        }
+    }, 0);
+
     container.innerHTML = feedTokens.map((token, idx) => {
         const signal = token.analysis?.signal || 'neutral';
         const score = token.analysis?.score || 50;
@@ -2202,20 +2218,19 @@ function renderFeedTokens() {
         
         const timeAgo = getTimeAgo(token.timestamp);
         
-        // Show image if available, with placeholder fallback
+        // Always render the placeholder first; the actual image is fetched
+        // through the main process (loadImageAsBase64) so we bypass the
+        // renderer's webSecurity restrictions and avoid broken-icon flashes
+        // from cf-ipfs/mypinata/DexScreener-CDN URLs that return non-200 for
+        // brand-new tokens.
         const symbolText = (token.symbol || 'T').slice(0, 2).toUpperCase();
         const hasImage = token.image && token.image.length > 10 && !token.image.includes('undefined');
-        
-        const imageHtml = hasImage ? `
-            <img id="feed-img-${token.mint}" class="feed-token-icon" 
-                 src="${token.image}"
-                 style="width:45px; height:45px; border-radius:10px; object-fit:cover; border:1px solid var(--accent-primary);"
-                 onerror="this.style.display='none'; document.getElementById('feed-placeholder-${token.mint}').style.display='flex';">
-            <div id="feed-placeholder-${token.mint}" class="feed-token-placeholder" 
-                 style="display:none; width:45px; height:45px; border-radius:10px; background:linear-gradient(135deg,#00ff88,#0088ff); border:1px solid var(--accent-primary); align-items:center; justify-content:center; color:white; font-weight:bold; font-size:14px;">
-                 ${symbolText}
-            </div>` : `
-            <div id="feed-placeholder-${token.mint}" class="feed-token-placeholder" 
+
+        const imageHtml = `
+            <img id="feed-img-${token.mint}" class="feed-token-icon" data-image-url="${hasImage ? token.image : ''}"
+                 style="display:none; width:45px; height:45px; border-radius:10px; object-fit:cover; border:1px solid var(--accent-primary);"
+                 onerror="this.style.display='none'; var p=document.getElementById('feed-placeholder-${token.mint}'); if(p) p.style.display='flex';">
+            <div id="feed-placeholder-${token.mint}" class="feed-token-placeholder"
                  style="display:flex; width:45px; height:45px; border-radius:10px; background:linear-gradient(135deg,#00ff88,#0088ff); border:1px solid var(--accent-primary); align-items:center; justify-content:center; color:white; font-weight:bold; font-size:14px;">
                  ${symbolText}
             </div>`;
@@ -2929,33 +2944,18 @@ window.electronAPI.onLiveFeedStatus((connected) => {
     updateFeedStatus(connected);
 });
 
-// Handle icon updates from API fallbacks
+// Handle icon updates from API fallbacks. Always go through the main-process
+// base64 loader so we bypass webSecurity / mixed-content / IPFS-gateway flakiness
+// rather than dropping a raw <img src> into the DOM.
 window.electronAPI.onLiveFeedIconUpdate((data) => {
-    if (data.mint && data.image) {
-        // Update the token in our array
-        const token = feedTokens.find(t => t.mint === data.mint);
-        if (token) {
-            token.image = data.image;
-        }
-        
-        // Also check graduating tokens
-        const gradToken = graduatingTokens.find(t => t.mint === data.mint);
-        if (gradToken) {
-            gradToken.image = data.image;
-        }
-        
-        // Update the DOM directly for instant feedback
-        const feedItem = document.querySelector(`.feed-item[data-mint="${data.mint}"]`);
-        if (feedItem) {
-            const iconWrapper = feedItem.querySelector('.feed-token-icon-wrapper');
-            if (iconWrapper) {
-                iconWrapper.innerHTML = `
-                    <img src="${data.image}" class="feed-token-icon" style="width:45px; height:45px; border-radius:10px; object-fit:cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="feed-token-placeholder" style="display:none;">🪙</div>
-                `;
-            }
-        }
-    }
+    if (!data || !data.mint || !data.image) return;
+
+    const token = feedTokens.find(t => t.mint === data.mint);
+    if (token) token.image = data.image;
+    const gradToken = graduatingTokens.find(t => t.mint === data.mint);
+    if (gradToken) gradToken.image = data.image;
+
+    loadFeedImage(data.mint, data.image);
 });
 
 // Handle socials updates from API
@@ -2989,24 +2989,41 @@ window.electronAPI.onLiveFeedSocialsUpdate((data) => {
     }
 });
 
-// Load feed token image asynchronously
+// Load feed token image asynchronously through the main process (bypasses
+// renderer webSecurity, follows redirects, and converts to a base64 data URL).
+const _feedImageInflight = new Map(); // mint -> Promise to dedupe rapid re-renders
 async function loadFeedImage(mint, imageUrl) {
-    try {
-        const base64 = await loadImageAsBase64(imageUrl);
-        if (base64) {
+    if (!mint || !imageUrl || imageUrl.length < 10) return;
+
+    // If we've already kicked off a load for this mint and the URL hasn't
+    // changed, don't re-fetch.
+    if (_feedImageInflight.has(mint) && _feedImageInflight.get(mint).url === imageUrl) {
+        return _feedImageInflight.get(mint).promise;
+    }
+
+    const promise = (async () => {
+        try {
+            const base64 = await loadImageAsBase64(imageUrl);
+            if (!base64) return;
             const imgEl = document.getElementById(`feed-img-${mint}`);
             const placeholderEl = document.getElementById(`feed-placeholder-${mint}`);
             if (imgEl) {
                 imgEl.src = base64;
                 imgEl.style.display = 'block';
+                imgEl.dataset.imageUrl = imageUrl;
             }
-            if (placeholderEl) {
-                placeholderEl.style.display = 'none';
+            if (placeholderEl) placeholderEl.style.display = 'none';
+        } catch (e) {
+            console.log('Feed image load error:', e);
+        } finally {
+            // Allow re-fetch on the next URL change for this mint.
+            if (_feedImageInflight.get(mint)?.url === imageUrl) {
+                _feedImageInflight.delete(mint);
             }
         }
-    } catch (e) {
-        console.log('Feed image load error:', e);
-    }
+    })();
+    _feedImageInflight.set(mint, { url: imageUrl, promise });
+    return promise;
 }
 
 // Toggle auto-snipe bullish tokens
@@ -4035,4 +4052,129 @@ window.openPumpFunLaunch = openPumpFunLaunch;
 window.selectImageFromComputer = selectImageFromComputer;
 window.clearSelectedImage = clearSelectedImage;
 window.copyToClipboard = copyToClipboard;
+
+// ============================================
+// STATS PAGE — performance dashboard backed by JSONL trade journal
+// ============================================
+
+function _solFmt(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '—';
+    const sign = n >= 0 ? '+' : '';
+    return `${sign}${n.toFixed(4)} SOL`;
+}
+
+function _solColor(n) {
+    if (n > 0) return 'var(--accent-primary)';
+    if (n < 0) return 'var(--danger)';
+    return 'var(--text-muted)';
+}
+
+function _renderEquityCurve(points) {
+    const svg = document.getElementById('statsEquitySvg');
+    if (!svg) return;
+    if (!points || points.length === 0) {
+        svg.innerHTML = `<text x="400" y="100" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="12">No trades yet</text>`;
+        return;
+    }
+    const W = 800, H = 200, PAD = 14;
+    const xs = points.map(p => p.ts);
+    const ys = points.map(p => p.cumulativeSOL);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const yMin = Math.min(0, ...ys), yMax = Math.max(0, ...ys);
+    const xSpan = Math.max(1, xMax - xMin);
+    const ySpan = Math.max(0.000001, yMax - yMin);
+    const X = (t) => PAD + ((t - xMin) / xSpan) * (W - 2 * PAD);
+    const Y = (v) => H - PAD - ((v - yMin) / ySpan) * (H - 2 * PAD);
+
+    const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(p.ts).toFixed(1)},${Y(p.cumulativeSOL).toFixed(1)}`).join(' ');
+    const last = points[points.length - 1];
+    const lastIsUp = last.cumulativeSOL >= 0;
+    const stroke = lastIsUp ? '#00ff88' : '#ff5572';
+    const zeroY = Y(0).toFixed(1);
+
+    svg.innerHTML = `
+        <line x1="${PAD}" y1="${zeroY}" x2="${W - PAD}" y2="${zeroY}" stroke="rgba(255,255,255,0.15)" stroke-dasharray="3 3"/>
+        <path d="${d} L${X(last.ts).toFixed(1)},${zeroY} L${PAD},${zeroY} Z" fill="${stroke}" fill-opacity="0.12"/>
+        <path d="${d}" fill="none" stroke="${stroke}" stroke-width="2"/>
+    `;
+}
+
+function _renderTopTokens(rows) {
+    const el = document.getElementById('statsTopTokens');
+    if (!el) return;
+    if (!rows || rows.length === 0) {
+        el.innerHTML = `<div style="padding:18px; color:var(--text-muted); text-align:center;">No closed trades yet</div>`;
+        return;
+    }
+    el.innerHTML = rows.map(r => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px 18px; border-bottom: 1px solid rgba(255,255,255,0.04);">
+            <div style="overflow:hidden;">
+                <div style="font-weight:600;">${(r.symbol || '?').toString().slice(0, 12)}</div>
+                <div style="font-size:11px; color:var(--text-muted); font-family:monospace;">${(r.mint || '').slice(0, 12)}…</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="color:${_solColor(r.profitSOL)}; font-weight:600;">${_solFmt(r.profitSOL)}</div>
+                <div style="font-size:11px; color:var(--text-muted);">${r.count} trade${r.count === 1 ? '' : 's'}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function _renderRecentTrades(rows) {
+    const el = document.getElementById('statsRecentTrades');
+    if (!el) return;
+    if (!rows || rows.length === 0) {
+        el.innerHTML = `<div style="padding:18px; color:var(--text-muted); text-align:center;">No trades recorded yet</div>`;
+        return;
+    }
+    el.innerHTML = rows.slice(0, 50).map(r => {
+        const ts = new Date(r.ts);
+        const when = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const day = ts.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const mult = r.multiplier ? `${r.multiplier.toFixed(2)}x` : '—';
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 9px 18px; border-bottom: 1px solid rgba(255,255,255,0.04);">
+                <div style="overflow:hidden;">
+                    <div style="font-size:13px;">
+                        <span style="font-weight:600;">${(r.symbol || r.name || '?').toString().slice(0, 16)}</span>
+                        ${r.paper ? '<span style="font-size:10px; color:var(--warning); margin-left:6px;">paper</span>' : ''}
+                        ${r.source === 'copytrade' ? '<span style="font-size:10px; color:#9945FF; margin-left:6px;">copy</span>' : ''}
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted);">${day} ${when} · ${mult} · ${r.sellPercent}%</div>
+                </div>
+                <div style="color:${_solColor(r.profitSOL)}; font-weight:600;">${_solFmt(r.profitSOL)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function refreshStatsPage() {
+    try {
+        const stats = await window.electronAPI.getTradeStats();
+        if (!stats || stats.error) {
+            console.log('[stats] error:', stats?.error);
+            return;
+        }
+        const setText = (id, text, color) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = text;
+            if (color) el.style.color = color;
+        };
+        setText('statsNetSOL', _solFmt(stats.netSOL), _solColor(stats.netSOL));
+        setText('statsTotalTrades', String(stats.totalTrades || 0));
+        setText('statsWinRate', stats.totalTrades ? `${stats.winRate.toFixed(1)}%` : '—');
+        setText('stats24hNetSOL', _solFmt(stats.last24hNetSOL), _solColor(stats.last24hNetSOL));
+
+        _renderEquityCurve(stats.equityCurve);
+        _renderTopTokens(stats.topTokens);
+
+        const history = await window.electronAPI.getTradeHistory(50);
+        _renderRecentTrades(history);
+    } catch (e) {
+        console.log('[stats] refresh failed:', e);
+    }
+}
+
+window.refreshStatsPage = refreshStatsPage;
 

@@ -1,8 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const https = require('https');
+const journal = require('./trade-journal');
 
 // Create application menu with Edit commands (for copy/paste)
 const menuTemplate = [
@@ -35,14 +37,27 @@ const menuTemplate = [
 let botProcess = null;
 let mainWindow = null;
 
-// License validation constants
-const LICENSE_SECRET = 'ZOOT_SNIPER_2024_SECRET_KEY_XYZ';
-const PRODUCT_ID = 'ZOOT-SNIPER-V1';
+// ═══════════════════════════════════════════════════════════════
+// LICENSE VALIDATION
+// All trust now lives on the licensing server (see ./licensing-server). The
+// shipped client only knows the API URL + a public key for verifying signed
+// JWTs. No master keys, no shared secret — what's in the asar is no longer
+// enough to bypass licensing.
+//
+// LICENSE_API_URL can be overridden at runtime so we can point a build at a
+// staging/self-hosted server without re-shipping. Falls back to the
+// production endpoint baked in below.
+// ═══════════════════════════════════════════════════════════════
+const LICENSE_API_URL = process.env.ZOOT_LICENSE_API_URL ||
+    'https://license.zoot.bot/v1';
+const PRODUCT_ID = 'ZOOT-SNIPER-V2';
 const TRIAL_DURATION_DAYS = 3;
+const OFFLINE_GRACE_HOURS = 72; // keep working for 72h if the API is unreachable
 
 // Get user data path for storing license and trial data
 const userDataPath = app.getPath('userData');
 const licenseFile = path.join(userDataPath, 'license.txt');
+const licenseCacheFile = path.join(userDataPath, '.license_cache');
 const trialDataFile = path.join(userDataPath, '.trial_data');
 const configFile = path.join(userDataPath, 'config.json');
 
@@ -74,7 +89,11 @@ app.whenReady().then(() => {
     // Set application menu (enables Ctrl+C, Ctrl+V, etc.)
     const menu = Menu.buildFromTemplate(menuTemplate);
     Menu.setApplicationMenu(menu);
-    
+
+    // Initialize the trade journal in userData so bot-core / IPC handlers
+    // share a singleton instance (require cache).
+    journal.init(userDataPath);
+
     createWindow();
 
     // Add right-click context menu for copy/paste
@@ -150,141 +169,153 @@ function saveTrialData(data) {
     fs.writeFileSync(trialDataFile, JSON.stringify(data), 'utf-8');
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MASTER OWNER LICENSE KEYS (Never expire, work on any machine)
-// ═══════════════════════════════════════════════════════════════
-const MASTER_KEYS = [
-    'ZOOT-MASTER-OWNER-2024',
-    'ZOOT-ADMIN-FOREVER-KEY',
-    'ZOOT-SONDDY-UNLIMITED'
-];
+function loadLicenseCache() {
+    try {
+        if (!fs.existsSync(licenseCacheFile)) return null;
+        return JSON.parse(fs.readFileSync(licenseCacheFile, 'utf-8'));
+    } catch (e) {
+        return null;
+    }
+}
 
-function validateLicense(licenseKey) {
+function saveLicenseCache(payload) {
+    try {
+        fs.writeFileSync(licenseCacheFile, JSON.stringify(payload), 'utf-8');
+    } catch (e) {}
+}
+
+/**
+ * Hit the licensing API. Throws on network or server error so callers can
+ * decide between rejecting and falling back to cached state.
+ */
+function fetchLicenseStatusRemote(licenseKey, machineId) {
+    return new Promise((resolve, reject) => {
+        try {
+            const u = new URL(`${LICENSE_API_URL}/validate`);
+            const body = JSON.stringify({
+                licenseKey,
+                machineId,
+                product: PRODUCT_ID,
+                appVersion: app.getVersion ? app.getVersion() : '2.0.0'
+            });
+            const req = https.request({
+                hostname: u.hostname,
+                port: u.port || 443,
+                path: u.pathname + u.search,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body),
+                    'User-Agent': `ZootSniper/${PRODUCT_ID}`
+                },
+                timeout: 5000
+            }, (res) => {
+                const chunks = [];
+                res.on('data', c => chunks.push(c));
+                res.on('end', () => {
+                    try {
+                        const text = Buffer.concat(chunks).toString();
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            resolve(JSON.parse(text));
+                        } else {
+                            reject(new Error(`HTTP ${res.statusCode}: ${text.slice(0, 200)}`));
+                        }
+                    } catch (e) { reject(e); }
+                });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => { req.destroy(new Error('License request timed out')); });
+            req.write(body);
+            req.end();
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+async function validateLicense(licenseKey) {
     if (!licenseKey || licenseKey.trim() === '') {
         return { valid: false, error: 'No license key provided' };
     }
 
     licenseKey = licenseKey.trim().toUpperCase();
+    const machineId = getMachineId();
 
-    // ═══════════════════════════════════════════════════════════════
-    // CHECK FOR MASTER OWNER LICENSE (Never expires, any machine)
-    // ═══════════════════════════════════════════════════════════════
-    if (MASTER_KEYS.includes(licenseKey)) {
-        return {
-            valid: true,
-            type: 'Owner',
-            expires: null,
-            machineId: getMachineId(),
-            isOwner: true
-        };
-    }
-
-    // Trial license
+    // Local-only: TRIAL keys still bootstrap themselves so a brand-new install
+    // can be evaluated without first hitting the server.
     if (licenseKey.startsWith('TRIAL-')) {
         const trialData = loadTrialData();
-        
         if (!trialData || trialData.key !== licenseKey) {
-            // First time using this trial key - start the trial
             saveTrialData({
                 key: licenseKey,
                 startTime: new Date().toISOString(),
-                machineId: getMachineId()
+                machineId
             });
-            
             return {
                 valid: true,
                 type: 'TRIAL',
-                expires: new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
+                expires: new Date(Date.now() + TRIAL_DURATION_DAYS * 86400_000),
                 timeLeft: { days: TRIAL_DURATION_DAYS, hours: 0 },
-                machineId: getMachineId()
+                machineId
             };
         }
-
-        const now = new Date();
-        const trialStartTime = new Date(trialData.startTime);
-        const trialEndTime = new Date(trialStartTime);
-        trialEndTime.setDate(trialEndTime.getDate() + TRIAL_DURATION_DAYS);
-
-        if (now > trialEndTime) {
+        const trialEnd = new Date(new Date(trialData.startTime).getTime() + TRIAL_DURATION_DAYS * 86400_000);
+        if (Date.now() > trialEnd.getTime()) {
             return { valid: false, error: 'Trial period expired', type: 'TRIAL_EXPIRED' };
         }
-
-        const timeLeftMs = trialEndTime.getTime() - now.getTime();
-        const daysLeft = Math.floor(timeLeftMs / (1000 * 60 * 60 * 24));
-        const hoursLeft = Math.floor((timeLeftMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
+        const msLeft = trialEnd.getTime() - Date.now();
         return {
             valid: true,
             type: 'TRIAL',
-            expires: trialEndTime,
-            timeLeft: { days: daysLeft, hours: hoursLeft },
-            machineId: getMachineId()
+            expires: trialEnd,
+            timeLeft: {
+                days: Math.floor(msLeft / 86400_000),
+                hours: Math.floor((msLeft % 86400_000) / 3600_000)
+            },
+            machineId
         };
     }
 
-    // Paid license format: ZOOT-XXXX-XXXX-XXXX-TYPE-EXPIRY-HASH
-    const parts = licenseKey.split('-');
-    
-    if (parts.length < 6 || parts[0] !== 'ZOOT') {
-        return { valid: false, error: 'Invalid license format' };
-    }
-
-    const licenseType = parts[4];
-    const expiryPart = parts[5];
-    const providedHash = parts[6];
-
-    // Validate hash
-    const keyWithoutHash = parts.slice(0, 6).join('-');
-    const machineId = getMachineId();
-    const expectedHash = generateLicenseHash(keyWithoutHash, machineId);
-
-    // For demo purposes, accept any properly formatted key
-    // In production, you would verify against a server
-
-    let expiryDate = null;
-    if (licenseType === 'LT') {
-        // Lifetime license
+    // Paid keys go through the server.
+    try {
+        const remote = await fetchLicenseStatusRemote(licenseKey, machineId);
+        if (remote && remote.valid) {
+            saveLicenseCache({
+                key: licenseKey,
+                machineId,
+                payload: remote,
+                cachedAt: Date.now()
+            });
+            return {
+                valid: true,
+                type: remote.type || 'Standard',
+                expires: remote.expires ? new Date(remote.expires) : null,
+                machineId
+            };
+        }
+        return { valid: false, error: remote?.error || 'License rejected by server' };
+    } catch (netErr) {
+        // Offline grace: if we have a recent (<72h) cached approval for this
+        // exact key + machine, keep working. Otherwise fail closed.
+        const cached = loadLicenseCache();
+        const ageMs = cached ? (Date.now() - (cached.cachedAt || 0)) : Infinity;
+        if (cached && cached.key === licenseKey && cached.machineId === machineId &&
+            ageMs <= OFFLINE_GRACE_HOURS * 3600_000 && cached.payload?.valid) {
+            const hoursLeft = Math.max(0, OFFLINE_GRACE_HOURS - Math.floor(ageMs / 3600_000));
+            return {
+                valid: true,
+                type: (cached.payload.type || 'Standard') + ' (offline)',
+                expires: cached.payload.expires ? new Date(cached.payload.expires) : null,
+                machineId,
+                offline: true,
+                offlineHoursRemaining: hoursLeft
+            };
+        }
         return {
-            valid: true,
-            type: 'Lifetime',
-            expires: null,
-            machineId: machineId
+            valid: false,
+            error: `Licensing server unreachable and no offline grace available: ${netErr.message}`
         };
-    } else if (licenseType === 'STD') {
-        // Standard - 30 days
-        const purchaseDate = parseExpiryDate(expiryPart);
-        if (purchaseDate) {
-            expiryDate = new Date(purchaseDate);
-            expiryDate.setDate(expiryDate.getDate() + 30);
-        }
-    } else if (licenseType === 'PRO') {
-        // Pro - 90 days
-        const purchaseDate = parseExpiryDate(expiryPart);
-        if (purchaseDate) {
-            expiryDate = new Date(purchaseDate);
-            expiryDate.setDate(expiryDate.getDate() + 90);
-        }
     }
-
-    if (expiryDate && new Date() > expiryDate) {
-        return { valid: false, error: 'License expired', type: 'EXPIRED' };
-    }
-
-    return {
-        valid: true,
-        type: licenseType === 'STD' ? 'Standard' : licenseType === 'PRO' ? 'Pro' : licenseType,
-        expires: expiryDate,
-        machineId: machineId
-    };
-}
-
-function parseExpiryDate(dateStr) {
-    // Format: YYMMDD
-    if (dateStr.length !== 6) return null;
-    const year = 2000 + parseInt(dateStr.substring(0, 2));
-    const month = parseInt(dateStr.substring(2, 4)) - 1;
-    const day = parseInt(dateStr.substring(4, 6));
-    return new Date(year, month, day);
 }
 
 // ============================================
@@ -313,7 +344,7 @@ ipcMain.handle('get-license-status', async () => {
     try {
         if (fs.existsSync(licenseFile)) {
             const licenseKey = fs.readFileSync(licenseFile, 'utf-8').trim();
-            return validateLicense(licenseKey);
+            return await validateLicense(licenseKey);
         }
         return { valid: false, error: 'No license found' };
     } catch (e) {
@@ -323,7 +354,7 @@ ipcMain.handle('get-license-status', async () => {
 
 ipcMain.handle('activate-license', async (event, licenseKey) => {
     try {
-        const result = validateLicense(licenseKey);
+        const result = await validateLicense(licenseKey);
         if (result.valid) {
             fs.writeFileSync(licenseFile, licenseKey, 'utf-8');
         }
@@ -337,42 +368,121 @@ ipcMain.handle('get-machine-id', async () => {
     return getMachineId();
 });
 
-// Configuration management
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION + ENCRYPTED PRIVATE KEY STORAGE
+//
+// Private keys are sealed with Electron `safeStorage` (DPAPI on Windows,
+// Keychain on macOS, libsecret on Linux). The on-disk format stores only
+// the encrypted blob; we never write a plaintext key back. Configs from
+// the v1 build are auto-migrated on first read.
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_CONFIG = {
+    privateKey: '',
+    rpcUrl: 'https://api.mainnet-beta.solana.com',
+
+    platform: 'pumpfun',  // 'pumpfun' | 'letsbonk' | 'both'
+    minMarketCap: 0,
+
+    buyAmount: 0.1,
+    priorityFee: 0.005,
+    stopLoss: 50,
+    takeProfit: 2.0,
+    maxSlippage: 15,
+
+    partialSellTarget: 6.0,
+    partialSellPercent: 66,
+    trailingStopMultiplier: 2.0,
+
+    sniperKeywords: '',
+    keywordFilterEnabled: false,
+
+    autoSell: true,
+    antiRug: true,
+
+    // v2: paper trade / dry run
+    paperTrade: false,
+
+    // v2: circuit breakers
+    dailyLossCapSOL: 0,          // 0 = off
+    maxConcurrentPositions: 0,   // 0 = unlimited
+    cooldownAfterLosses: 0,      // 0 = off
+    cooldownSeconds: 0,
+
+    // v2: Jito bundles
+    useJitoBundles: false,
+    jitoTipSOL: 0.001,
+
+    // v2.1: copy-trade mode
+    copyTradeEnabled: false,
+    copyTradeWallets: '',           // comma- or newline-separated wallet pubkeys
+    copyTradeSizeMultiplier: 1.0,   // 1.0 = same size, 0.5 = half the source buy
+    copyTradeMaxBuySOL: 0.5,        // hard cap regardless of multiplier
+    copyTradeMinSourceBuySOL: 0.1,  // ignore source buys below this (skip dust / test trades)
+    copyTradeOnlyPumpFun: true,     // skip other DEXes
+
+    // v2.2: Telegram alerts (opt-in; off until both token + chatId are set)
+    telegramEnabled: false,
+    telegramBotToken: '',
+    telegramChatId: '',
+    telegramAlertOnBuy: true,
+    telegramAlertOnSell: true,
+    telegramAlertOnError: true,
+    telegramDailySummary: true,
+    telegramAlertOnCircuitBreaker: true
+};
+
+function decryptPrivateKey(stored) {
+    if (!stored) return '';
+    if (typeof stored !== 'string') return '';
+    if (!stored.startsWith('enc:')) return stored; // legacy plaintext, will be re-encrypted on next save
+    try {
+        if (!safeStorage.isEncryptionAvailable()) return '';
+        return safeStorage.decryptString(Buffer.from(stored.slice(4), 'base64'));
+    } catch (e) {
+        return '';
+    }
+}
+
+function encryptPrivateKey(plain) {
+    if (!plain) return '';
+    try {
+        if (!safeStorage.isEncryptionAvailable()) {
+            // Encryption isn't available yet (rare; happens before app.whenReady on Linux).
+            // Storing plaintext on disk here is unacceptable, so refuse.
+            throw new Error('OS keychain not available; cannot store private key');
+        }
+        const buf = safeStorage.encryptString(plain);
+        return 'enc:' + buf.toString('base64');
+    } catch (e) {
+        throw e;
+    }
+}
+
 ipcMain.handle('get-config', async () => {
     try {
         if (fs.existsSync(configFile)) {
-            return JSON.parse(fs.readFileSync(configFile, 'utf-8'));
+            const raw = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
+            const merged = { ...DEFAULT_CONFIG, ...raw };
+
+            // Decrypt the private key for the renderer; if it's still plaintext
+            // (legacy v1 config), it'll come back as-is and get re-encrypted on
+            // the very next save-config.
+            merged.privateKey = decryptPrivateKey(merged.privateKey);
+
+            // One-time migration: if we just read a plaintext key, persist an
+            // encrypted version immediately so we never write it again.
+            const original = raw.privateKey;
+            if (original && typeof original === 'string' && !original.startsWith('enc:')) {
+                try {
+                    raw.privateKey = encryptPrivateKey(original);
+                    fs.writeFileSync(configFile, JSON.stringify(raw, null, 2), 'utf-8');
+                } catch (e) {
+                    console.warn('[config] could not migrate plaintext key:', e.message);
+                }
+            }
+            return merged;
         }
-        // Default config for pump.fun trading via PumpPortal
-        return {
-            // Wallet settings
-            privateKey: '',
-            rpcUrl: 'https://api.mainnet-beta.solana.com',
-            
-            // Platform selection
-            platform: 'pumpfun',  // 'pumpfun', 'letsbonk', or 'both'
-            minMarketCap: 0,      // 0 = buy all, set e.g. 5000 to skip below $5K
-            
-            // Trading settings
-            buyAmount: 0.1,
-            priorityFee: 0.005,
-            stopLoss: 50,
-            takeProfit: 2.0,
-            maxSlippage: 15,
-            
-            // Trailing profit strategy
-            partialSellTarget: 6.0,    // At 6x, sell partial
-            partialSellPercent: 66,    // Sell 66%
-            trailingStopMultiplier: 2.0, // After partial, stop at 2x
-            
-            // Keyword filter
-            sniperKeywords: '',         // Comma-separated keywords to filter
-            keywordFilterEnabled: false, // Only buy tokens matching keywords
-            
-            // Safety features
-            autoSell: true,
-            antiRug: true
-        };
+        return { ...DEFAULT_CONFIG };
     } catch (e) {
         return null;
     }
@@ -380,7 +490,13 @@ ipcMain.handle('get-config', async () => {
 
 ipcMain.handle('save-config', async (event, config) => {
     try {
-        fs.writeFileSync(configFile, JSON.stringify(config, null, 2), 'utf-8');
+        const persisted = { ...config };
+        if (persisted.privateKey) {
+            persisted.privateKey = encryptPrivateKey(persisted.privateKey);
+        } else {
+            persisted.privateKey = '';
+        }
+        fs.writeFileSync(configFile, JSON.stringify(persisted, null, 2), 'utf-8');
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };
@@ -786,6 +902,23 @@ ipcMain.handle('select-image-file', async () => {
     } catch (e) {
         console.error('[File Select] Error:', e.message);
         return { success: false, error: e.message };
+    }
+});
+
+// Trade journal — stats panel & history table read from these
+ipcMain.handle('get-trade-stats', async () => {
+    try {
+        return journal.stats();
+    } catch (e) {
+        return { error: e.message };
+    }
+});
+
+ipcMain.handle('get-trade-history', async (event, limit) => {
+    try {
+        return journal.readAll(typeof limit === 'number' ? limit : 100);
+    } catch (e) {
+        return [];
     }
 });
 

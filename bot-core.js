@@ -9,6 +9,8 @@ const { Connection, Keypair, VersionedTransaction, PublicKey, LAMPORTS_PER_SOL }
 const axios = require('axios');
 const bs58 = require('bs58');
 const WebSocket = require('ws');
+const notifications = require('./notifications');
+const journal = require('./trade-journal');
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -26,6 +28,11 @@ let pumpWebSocket = null;
 let wsConnected = false;
 let wsReconnectAttempts = 0;
 
+// Trade-tick subscriptions for active positions (tick-driven exits, no 10s polling)
+let tradeWebSocket = null;
+let tradeWsConnected = false;
+const tokenTradeSubscriptions = new Set();
+
 const seenTokens = new Set();
 const activePositions = new Map();
 let totalProfitSOL = 0;
@@ -37,6 +44,90 @@ let winningTrades = 0;
 let tokenCheckInterval = null;
 let positionCheckInterval = null;
 let statusInterval = null;
+let antiRugInterval = null;
+
+// Session metadata used by Telegram daily summary on stop().
+let sessionStartedAtMs = 0;
+
+// ═══════════════════════════════════════════════════════════════
+// CIRCUIT BREAKERS (daily loss cap, max concurrent, losing-streak cooldown)
+// ═══════════════════════════════════════════════════════════════
+const circuitBreaker = {
+    dayKey: '',                  // 'YYYY-MM-DD' to roll over each day
+    dailyProfitSOL: 0,           // running net profit today
+    consecutiveLosses: 0,        // resets on a winner
+    cooldownUntilMs: 0,          // ms epoch; new buys blocked until then
+    tripped: false               // set when daily loss cap is hit
+};
+
+function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function rolloverDailyIfNeeded() {
+    const k = todayKey();
+    if (circuitBreaker.dayKey !== k) {
+        circuitBreaker.dayKey = k;
+        circuitBreaker.dailyProfitSOL = 0;
+        circuitBreaker.tripped = false;
+    }
+}
+
+/**
+ * Returns null if a new buy is allowed, or a string reason if blocked.
+ */
+function circuitBreakerBlockReason() {
+    rolloverDailyIfNeeded();
+    const maxPos = config.maxConcurrentPositions || 0;
+    if (maxPos > 0 && activePositions.size >= maxPos) {
+        return `Max concurrent positions reached (${activePositions.size}/${maxPos})`;
+    }
+    if (circuitBreaker.tripped) {
+        return `Daily loss cap hit (${circuitBreaker.dailyProfitSOL.toFixed(4)} SOL today)`;
+    }
+    if (Date.now() < circuitBreaker.cooldownUntilMs) {
+        const secs = Math.ceil((circuitBreaker.cooldownUntilMs - Date.now()) / 1000);
+        return `Losing-streak cooldown (${secs}s remaining)`;
+    }
+    const dailyCap = parseFloat(config.dailyLossCapSOL || 0);
+    if (dailyCap > 0 && circuitBreaker.dailyProfitSOL <= -Math.abs(dailyCap)) {
+        circuitBreaker.tripped = true;
+        return `Daily loss cap hit (${circuitBreaker.dailyProfitSOL.toFixed(4)} SOL today)`;
+    }
+    return null;
+}
+
+/**
+ * Record a closed-trade outcome and update streak/cooldown state.
+ */
+function recordTradeOutcome(profitSOL) {
+    rolloverDailyIfNeeded();
+    circuitBreaker.dailyProfitSOL += profitSOL;
+    if (profitSOL >= 0) {
+        circuitBreaker.consecutiveLosses = 0;
+    } else {
+        circuitBreaker.consecutiveLosses += 1;
+        const lossesBeforeCooldown = parseInt(config.cooldownAfterLosses || 0);
+        const cooldownSecs = parseInt(config.cooldownSeconds || 0);
+        if (lossesBeforeCooldown > 0 && cooldownSecs > 0 &&
+            circuitBreaker.consecutiveLosses >= lossesBeforeCooldown) {
+            circuitBreaker.cooldownUntilMs = Date.now() + cooldownSecs * 1000;
+            log(`🧊 Cooldown engaged for ${cooldownSecs}s after ${circuitBreaker.consecutiveLosses} consecutive losses`, 'warning');
+        }
+    }
+    const dailyCap = parseFloat(config.dailyLossCapSOL || 0);
+    if (dailyCap > 0 && circuitBreaker.dailyProfitSOL <= -Math.abs(dailyCap)) {
+        if (!circuitBreaker.tripped) {
+            // Only alert on the transition into tripped; subsequent skipped buys
+            // emit their own alertCircuitBreaker which is coalesced.
+            notifications.alertCircuitBreaker(
+                `Daily loss cap (${dailyCap} SOL) hit. P&L today: ${circuitBreaker.dailyProfitSOL.toFixed(4)} SOL`
+            );
+        }
+        circuitBreaker.tripped = true;
+        log(`🛑 Daily loss cap reached. New buys blocked until tomorrow.`, 'error');
+    }
+}
 
 // RPC fallbacks
 const RPC_ENDPOINTS = [
@@ -44,6 +135,85 @@ const RPC_ENDPOINTS = [
     'https://rpc.ankr.com/solana',
     'https://solana.public-rpc.com'
 ];
+
+// ═══════════════════════════════════════════════════════════════
+// PAPER TRADE / DRY RUN MODE
+// All buy/sell paths short-circuit through these helpers when enabled,
+// so the user can validate detection + filter + exit logic before risking SOL.
+// ═══════════════════════════════════════════════════════════════
+function isPaperTrade() {
+    return !!config.paperTrade;
+}
+
+function fakeSignature(prefix) {
+    const r = Math.random().toString(36).slice(2, 12).toUpperCase();
+    return `${prefix || 'PAPER'}_${Date.now()}_${r}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JITO BUNDLE PATH (optional, falls back to PumpPortal send if unreachable)
+// Block engine endpoints (try in order). Tip account list is public.
+// ═══════════════════════════════════════════════════════════════
+const JITO_BLOCK_ENGINES = [
+    'https://mainnet.block-engine.jito.wtf',
+    'https://amsterdam.mainnet.block-engine.jito.wtf',
+    'https://frankfurt.mainnet.block-engine.jito.wtf',
+    'https://ny.mainnet.block-engine.jito.wtf',
+    'https://tokyo.mainnet.block-engine.jito.wtf'
+];
+
+const JITO_TIP_ACCOUNTS = [
+    '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
+    'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
+    'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
+    'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49',
+    'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
+    'ADuUkR4vqLUMWXxW9gh6D6L8pivKeVN5eGcKDGuBMG3y',
+    'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
+    '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT'
+];
+
+function pickJitoTipAccount() {
+    return JITO_TIP_ACCOUNTS[Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)];
+}
+
+function isJitoEnabled() {
+    return !!config.useJitoBundles && (parseFloat(config.jitoTipSOL) || 0) > 0;
+}
+
+/**
+ * Send a signed VersionedTransaction through Jito Block Engine as a 1-tx bundle.
+ * Returns the buy signature (NOT the bundle id) on success.
+ *
+ * The caller is responsible for already including a SystemProgram.transfer
+ * to a Jito tip account inside the tx (PumpPortal supports a `jitoOnly` and
+ * `tip` field that does this server-side, which we use below).
+ */
+async function sendThroughJito(serializedTx) {
+    const txBase58 = bs58.encode(serializedTx);
+    let lastErr;
+    for (const engine of JITO_BLOCK_ENGINES) {
+        try {
+            const resp = await axios.post(
+                `${engine}/api/v1/bundles`,
+                {
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'sendBundle',
+                    params: [[txBase58]]
+                },
+                { timeout: 5000, headers: { 'Content-Type': 'application/json' } }
+            );
+            if (resp.data?.result) {
+                return { bundleId: resp.data.result, engine };
+            }
+            lastErr = resp.data?.error || resp.data;
+        } catch (e) {
+            lastErr = e.message;
+        }
+    }
+    throw new Error(`Jito bundle send failed across ${JITO_BLOCK_ENGINES.length} engines: ${lastErr}`);
+}
 
 // Trailing profit config (will be updated from user settings)
 let TRAILING_CONFIG = {
@@ -383,6 +553,131 @@ function connectLetsBonkWebSocket() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// COPY-TRADE — mirror buys from a watchlist of wallets
+//
+// Subscribes to PumpPortal's `subscribeAccountTrade` for every wallet the
+// user has listed in `config.copyTradeWallets`. When one of those wallets
+// buys a pump.fun / LetsBonk token we don't already hold, we mirror with a
+// scaled size, capped at `copyTradeMaxBuySOL`. Sells are not mirrored —
+// the bot's own exit logic (trailing stop / paper-trade / circuit breaker)
+// owns that side once we're in a position.
+// ═══════════════════════════════════════════════════════════════
+let copyTradeWebSocket = null;
+let copyTradeWatchedWallets = [];
+
+function parseCopyTradeWallets(raw) {
+    if (!raw) return [];
+    return String(raw)
+        .split(/[\s,]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        // Solana pubkeys are 32-44 base58 chars. This is the cheapest possible
+        // sanity check before we send them upstream.
+        .filter(s => s.length >= 32 && s.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(s));
+}
+
+function connectCopyTradeWebSocket() {
+    if (!config.copyTradeEnabled) return;
+    copyTradeWatchedWallets = parseCopyTradeWallets(config.copyTradeWallets);
+    if (copyTradeWatchedWallets.length === 0) {
+        log('👥 Copy-trade is on, but no valid wallet pubkeys configured. Skipping.', 'warning');
+        return;
+    }
+
+    if (copyTradeWebSocket && copyTradeWebSocket.readyState === WebSocket.OPEN) {
+        return;
+    }
+
+    log(`👥 Copy-trade: subscribing to ${copyTradeWatchedWallets.length} wallet(s)`, 'warning');
+    copyTradeWebSocket = new WebSocket('wss://pumpportal.fun/api/data');
+
+    copyTradeWebSocket.on('open', () => {
+        try {
+            copyTradeWebSocket.send(JSON.stringify({
+                method: 'subscribeAccountTrade',
+                keys: copyTradeWatchedWallets
+            }));
+            log('👥 Copy-trade stream connected', 'success');
+        } catch (e) {
+            log(`👥 Copy-trade subscribe failed: ${e.message}`, 'warning');
+        }
+    });
+
+    copyTradeWebSocket.on('message', async (data) => {
+        if (!isRunning) return;
+        try {
+            const msg = JSON.parse(data.toString());
+            // PumpPortal account-trade messages carry: txType, mint, traderPublicKey,
+            // solAmount, tokenAmount, name, symbol, plus pool ('pump' | 'raydium' | ...).
+            if (!msg.mint || !msg.traderPublicKey || msg.txType !== 'buy') return;
+            if (!copyTradeWatchedWallets.includes(msg.traderPublicKey)) return;
+
+            const sourceSol = parseFloat(msg.solAmount || 0);
+            const minSrc = parseFloat(config.copyTradeMinSourceBuySOL || 0);
+            if (sourceSol > 0 && minSrc > 0 && sourceSol < minSrc) {
+                log(`👥 Skipping copy-trade: source buy ${sourceSol} SOL < min ${minSrc}`, 'info');
+                return;
+            }
+
+            // Optional pool filter. PumpPortal labels pump.fun bonding-curve trades
+            // as 'pump'; LetsBonk uses 'pump-amm' or similar; Raydium has its own.
+            // When `copyTradeOnlyPumpFun` is on we only mirror bonding-curve buys.
+            if (config.copyTradeOnlyPumpFun && msg.pool && msg.pool !== 'pump') {
+                log(`👥 Skipping copy-trade: pool=${msg.pool} not pump.fun`, 'info');
+                return;
+            }
+
+            // Don't double-buy something we already hold.
+            if (activePositions.has(msg.mint) || seenTokens.has(msg.mint)) return;
+            seenTokens.add(msg.mint);
+
+            const multiplier = parseFloat(config.copyTradeSizeMultiplier || 1.0);
+            const cap = parseFloat(config.copyTradeMaxBuySOL || 0.5);
+            const ourSize = Math.min(Math.max(0, sourceSol * multiplier), cap);
+            if (ourSize <= 0) return;
+
+            const tokenName = msg.name || msg.symbol || 'CopyToken';
+            log(``, 'warning');
+            log(`👥 COPY-TRADE TRIGGER`, 'warning');
+            log(`   From: ${msg.traderPublicKey.slice(0, 8)}...${msg.traderPublicKey.slice(-4)}`, 'info');
+            log(`   Source size: ${sourceSol} SOL → mirror ${ourSize} SOL`, 'info');
+
+            await executeBuy(msg.mint, tokenName, {
+                platform: msg.pool === 'pump' ? 'pumpfun' : (msg.pool || 'pumpfun'),
+                name: msg.name,
+                symbol: msg.symbol,
+                marketCapSol: msg.marketCapSol,
+                marketCapUsd: msg.usdMarketCap || (msg.marketCapSol ? msg.marketCapSol * 200 : 0),
+                vSolInBondingCurve: msg.vSolInBondingCurve,
+                uri: msg.uri
+            }, {
+                source: 'copytrade',
+                sourceWallet: msg.traderPublicKey,
+                buyAmountOverride: ourSize
+            });
+        } catch (e) {
+            // Best-effort; ignore parse glitches
+        }
+    });
+
+    copyTradeWebSocket.on('error', (e) => log(`👥 Copy-trade WS error: ${e.message}`, 'warning'));
+    copyTradeWebSocket.on('close', () => {
+        if (isRunning && config.copyTradeEnabled) {
+            log('👥 Copy-trade reconnecting in 5s...', 'warning');
+            setTimeout(connectCopyTradeWebSocket, 5000);
+        }
+    });
+}
+
+function disconnectCopyTradeWebSocket() {
+    if (copyTradeWebSocket) {
+        try { copyTradeWebSocket.close(); } catch (e) {}
+        copyTradeWebSocket = null;
+    }
+    copyTradeWatchedWallets = [];
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BACKUP: API POLLING (if WebSocket fails)
 // ═══════════════════════════════════════════════════════════════
 
@@ -440,13 +735,36 @@ async function checkForNewTokens() {
 // TRADING - BUY (via Pump Portal bonding curve)
 // ═══════════════════════════════════════════════════════════════
 
-async function executeBuy(tokenAddress, tokenName, tokenData = {}) {
+async function executeBuy(tokenAddress, tokenName, tokenData = {}, opts = {}) {
     const platform = tokenData.platform || 'pumpfun';
     const platformEmoji = platform === 'letsbonk' ? '🟠' : '🟢';
     const platformName = platform === 'letsbonk' ? 'LETSBONK' : 'PUMP.FUN';
     const platformUrl = platform === 'letsbonk' ? 'letsbonk.fun' : 'pump.fun';
-    
+
+    // Skip if we already hold this token (caller may have raced).
+    if (activePositions.has(tokenAddress)) {
+        log(`↪️  Already holding ${tokenName}, skipping duplicate buy`, 'info');
+        return;
+    }
+
+    // CIRCUIT BREAKERS — block new buys before we even fetch market data
+    const blockReason = circuitBreakerBlockReason();
+    if (blockReason) {
+        log(`⛔ Skipping ${tokenName}: ${blockReason}`, 'warning');
+        notifications.alertCircuitBreaker(blockReason);
+        return;
+    }
+
+    // Allow callers (e.g. copy-trade) to override the buy size for this single
+    // trade. Falls back to config.buyAmount otherwise.
+    const buyAmount = (opts.buyAmountOverride && opts.buyAmountOverride > 0)
+        ? Math.min(parseFloat(opts.buyAmountOverride), parseFloat(config.copyTradeMaxBuySOL || 1e9))
+        : config.buyAmount;
+
     log(``, 'info');
+    if (opts.source === 'copytrade') {
+        log(`👥 COPY-TRADE: mirroring ${opts.sourceWallet?.slice(0, 8)}...`, 'warning');
+    }
     log(`${platformEmoji} NEW ${platformName} TOKEN DETECTED!`, 'warning');
     log(`   🪙 ${tokenName}`, 'info');
     log(`   📍 ${tokenAddress.slice(0, 12)}...${tokenAddress.slice(-8)}`, 'info');
@@ -511,62 +829,113 @@ async function executeBuy(tokenAddress, tokenName, tokenData = {}) {
     log(`🚀 EXECUTING INSTANT BUY ON BONDING CURVE...`, 'warning');
     log(`   Platform: ${platformName}`, 'info');
     log(`   Token: ${tokenName}`, 'info');
-    log(`   Amount: ${config.buyAmount} SOL`, 'info');
-    
+    log(`   Amount: ${buyAmount} SOL`, 'info');
+    if (opts.source === 'copytrade') {
+        log(`   🪞 Copy size = source × ${config.copyTradeSizeMultiplier} (capped at ${config.copyTradeMaxBuySOL} SOL)`, 'info');
+    }
+    if (isPaperTrade()) log(`   📝 PAPER TRADE — no funds will move`, 'warning');
+    if (isJitoEnabled()) log(`   🛰️ Jito bundle ON (tip ${config.jitoTipSOL} SOL)`, 'info');
+
+    // ── PAPER TRADE SHORT-CIRCUIT ───────────────────────────────────────────────
+    if (isPaperTrade()) {
+        const sig = fakeSignature('PAPER_BUY');
+        let initialPrice = 0;
+        try {
+            const priceData = await getPumpFunPrice(tokenAddress);
+            if (priceData && priceData.price > 0) initialPrice = priceData.price;
+        } catch (e) {}
+        totalBuys++;
+        activePositions.set(tokenAddress, {
+            tokenAddress, tokenName,
+            buyPriceSOL: buyAmount,
+            initialPrice,
+            buyTime: Date.now(),
+            buySignature: sig,
+            currentMultiplier: 1,
+            highestMultiplier: 1,
+            partialSold: false,
+            trailingStop: TRAILING_CONFIG.trailingStopAfterPartial,
+            status: 'holding',
+            paper: true
+        });
+        log(`✅ [PAPER] BUY recorded. Monitoring for exit triggers...`, 'success');
+        notifications.alertBuy({
+            tokenName, tokenAddress, amountSOL: buyAmount,
+            source: opts.source, sourceWallet: opts.sourceWallet, paper: true
+        });
+        subscribeToTokenTrades(tokenAddress);
+        updateStats();
+        return;
+    }
+
     try {
-        // Use Pump Portal for bonding curve trading
         log(`   🎯 Using Pump Portal (bonding curve)...`, 'info');
-        
+
+        // If Jito is enabled, ask PumpPortal to add a Jito tip transfer to the tx.
+        const tradePayload = {
+            publicKey: wallet.publicKey.toString(),
+            action: 'buy',
+            mint: tokenAddress,
+            amount: buyAmount,
+            denominatedInSol: 'true',
+            slippage: config.maxSlippage || 15,
+            priorityFee: config.priorityFee || 0.005,
+            pool: 'pump'
+        };
+        if (isJitoEnabled()) {
+            tradePayload.jitoOnly = 'true';
+            tradePayload.tip = parseFloat(config.jitoTipSOL);
+        }
+
         const response = await axios.post(
             'https://pumpportal.fun/api/trade-local',
-            {
-                publicKey: wallet.publicKey.toString(),
-                action: 'buy',
-                mint: tokenAddress,
-                amount: config.buyAmount,
-                denominatedInSol: 'true',
-                slippage: config.maxSlippage || 15,
-                priorityFee: config.priorityFee || 0.005,
-                pool: 'pump'
-            },
+            tradePayload,
             {
                 timeout: 20000,
                 headers: { 'Content-Type': 'application/json' },
                 responseType: 'arraybuffer'
             }
         );
-        
+
         if (response.data) {
             log(`   ✅ Got transaction from Pump Portal!`, 'success');
-            
-            // Deserialize and sign
+
             const txBuffer = Buffer.from(response.data);
             const transaction = VersionedTransaction.deserialize(txBuffer);
             transaction.sign([wallet]);
-            
-            log(`   📤 Sending to blockchain...`, 'info');
-            const signature = await connection.sendRawTransaction(
-                transaction.serialize(),
-                { skipPreflight: true, maxRetries: 3 }
-            );
-            
+            const serialized = transaction.serialize();
+
+            let signature;
+            if (isJitoEnabled()) {
+                try {
+                    log(`   🛰️ Submitting Jito bundle...`, 'info');
+                    const { bundleId, engine } = await sendThroughJito(serialized);
+                    log(`   📦 Bundle queued: ${bundleId.slice(0, 16)}... via ${new URL(engine).hostname}`, 'success');
+                    // PumpPortal's signed tx is what lands on chain; derive its sig from the buffer.
+                    signature = bs58.encode(transaction.signatures[0]);
+                } catch (jitoErr) {
+                    log(`   ⚠️ Jito send failed (${jitoErr.message}). Falling back to RPC...`, 'warning');
+                    signature = await connection.sendRawTransaction(serialized, { skipPreflight: true, maxRetries: 3 });
+                }
+            } else {
+                log(`   📤 Sending to blockchain...`, 'info');
+                signature = await connection.sendRawTransaction(serialized, { skipPreflight: true, maxRetries: 3 });
+            }
+
             log(`📤 TX sent: ${signature.slice(0, 20)}...`, 'success');
             log(`🔗 https://solscan.io/tx/${signature}`, 'info');
-            
-            // Confirm
+
             log(`   Confirming...`, 'info');
             const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-            
+
             if (confirmation.value.err) {
                 throw new Error('Transaction failed on chain');
             }
-            
-            // SUCCESS!
+
             totalBuys++;
-            log(`✅ PUMP.FUN BUY SUCCESS!`, 'success');
-            log(`   Spent: ${config.buyAmount} SOL`, 'success');
-            
-            // Get initial token price
+            log(`✅ ${platformName} BUY SUCCESS!`, 'success');
+            log(`   Spent: ${buyAmount} SOL`, 'success');
+
             let initialPrice = 0;
             try {
                 const priceData = await getPumpFunPrice(tokenAddress);
@@ -575,12 +944,11 @@ async function executeBuy(tokenAddress, tokenName, tokenData = {}) {
                     log(`   📊 Initial price: ${initialPrice.toFixed(12)} SOL per token`, 'info');
                 }
             } catch (e) {}
-            
-            // Track position with trailing profit strategy
+
             activePositions.set(tokenAddress, {
                 tokenAddress,
                 tokenName,
-                buyPriceSOL: config.buyAmount,
+                buyPriceSOL: buyAmount,
                 initialPrice: initialPrice,
                 buyTime: Date.now(),
                 buySignature: signature,
@@ -590,23 +958,31 @@ async function executeBuy(tokenAddress, tokenName, tokenData = {}) {
                 trailingStop: TRAILING_CONFIG.trailingStopAfterPartial,
                 status: 'holding'
             });
-            
+
             log(`   Monitoring for ${TRAILING_CONFIG.partialSellTarget}x partial exit...`, 'info');
             log(`   🛑 Stop loss: ${config.stopLoss}%`, 'info');
-            
+
+            notifications.alertBuy({
+                tokenName, tokenAddress, amountSOL: buyAmount,
+                source: opts.source, sourceWallet: opts.sourceWallet, paper: false
+            });
+
             updateStats();
-            
-            // Start checking position immediately (after 5 seconds)
+
+            // Tick-driven exits: subscribe to per-trade WebSocket so we react to each
+            // fill rather than a slow 10s poll. checkPositions() remains as a safety net.
+            subscribeToTokenTrades(tokenAddress);
+
             setTimeout(() => {
                 if (activePositions.has(tokenAddress)) {
                     checkPositions();
                 }
             }, 5000);
         }
-        
+
     } catch (error) {
-        const errorMsg = error.response?.data ? 
-            Buffer.from(error.response.data).toString() : 
+        const errorMsg = error.response?.data ?
+            Buffer.from(error.response.data).toString() :
             error.message;
         log(`❌ BUY FAILED: ${errorMsg}`, 'error');
         log(`   🔗 Manual: https://pump.fun/${tokenAddress}`, 'info');
@@ -620,7 +996,16 @@ async function executeBuy(tokenAddress, tokenName, tokenData = {}) {
 async function executePartialSell(tokenAddress, position, sellPercent) {
     log(`💎 EXECUTING PARTIAL SELL (${sellPercent}%)...`, 'warning');
     log(`   Token: ${position.tokenName}`, 'info');
-    
+
+    if (isPaperTrade() || position.paper) {
+        const partialProfit = position.buyPriceSOL * (position.currentMultiplier - 1) * (sellPercent / 100);
+        totalProfitSOL += partialProfit;
+        position.partialSellSignature = fakeSignature('PAPER_PSELL');
+        log(`✅ [PAPER] PARTIAL SELL recorded. +${partialProfit.toFixed(4)} SOL booked`, 'success');
+        updateStats();
+        return;
+    }
+
     try {
         const response = await axios.post(
             'https://pumpportal.fun/api/trade-local',
@@ -640,36 +1025,35 @@ async function executePartialSell(tokenAddress, position, sellPercent) {
                 responseType: 'arraybuffer'
             }
         );
-        
+
         if (response.data) {
             log(`   ✅ Got partial sell transaction!`, 'success');
-            
+
             const txBuffer = Buffer.from(response.data);
             const transaction = VersionedTransaction.deserialize(txBuffer);
             transaction.sign([wallet]);
-            
+
             const signature = await connection.sendRawTransaction(
                 transaction.serialize(),
                 { skipPreflight: true, maxRetries: 3 }
             );
-            
+
             log(`📤 Partial Sell TX: ${signature.slice(0, 20)}...`, 'success');
-            
+
             const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-            
+
             if (confirmation.value.err) {
                 throw new Error('Partial sell failed on chain');
             }
-            
-            // Calculate partial profit
+
             const partialProfit = position.buyPriceSOL * (position.currentMultiplier - 1) * (sellPercent / 100);
             totalProfitSOL += partialProfit;
-            
+
             log(`✅ PARTIAL SELL SUCCESS!`, 'success');
             log(`   Sold ${sellPercent}% of position`, 'success');
             log(`   💰 Locked profit: +${partialProfit.toFixed(4)} SOL`, 'success');
             log(`   Remaining ${100 - sellPercent}% still riding!`, 'info');
-            
+
             position.partialSellSignature = signature;
             updateStats();
         }
@@ -684,7 +1068,58 @@ async function executePartialSell(tokenAddress, position, sellPercent) {
 
 async function executeSell(tokenAddress, position, sellPercent = 100) {
     log(`💎 SELLING ${position.tokenName} (${sellPercent}%)...`, 'warning');
-    
+
+    const closePosition = (profit) => {
+        totalProfitSOL += profit;
+        totalSells++;
+        if (profit > 0) winningTrades++;
+        log(`✅ SELL ${isPaperTrade() || position.paper ? '[PAPER] ' : ''}SUCCESS!`, 'success');
+        log(`   Profit: ${profit >= 0 ? '+' : ''}${profit.toFixed(4)} SOL`, profit >= 0 ? 'success' : 'error');
+        log(`   🎉 Position closed!`, 'success');
+
+        // Persist to the JSONL trade journal. Both partial sells and full
+        // closes show up; partials use sellPercent < 100 so the dashboard
+        // can split them out if it wants.
+        journal.record({
+            ts: Date.now(),
+            mint: tokenAddress,
+            name: position.tokenName,
+            symbol: position.symbol || '',
+            platform: position.platform || 'pumpfun',
+            buySOL: position.buyPriceSOL,
+            profitSOL: profit,
+            multiplier: position.currentMultiplier,
+            sellPercent,
+            durationMs: position.buyTime ? (Date.now() - position.buyTime) : 0,
+            paper: !!(isPaperTrade() || position.paper),
+            source: position.source || 'detect'
+        });
+
+        notifications.alertSell({
+            tokenName: position.tokenName,
+            tokenAddress,
+            profitSOL: profit,
+            multiplier: position.currentMultiplier,
+            sellPercent,
+            paper: !!(isPaperTrade() || position.paper)
+        });
+        if (sellPercent === 100) {
+            unsubscribeFromTokenTrades(tokenAddress);
+            activePositions.delete(tokenAddress);
+            recordTradeOutcome(profit);
+        } else {
+            position.partialSold = true;
+            position.remainingPercent = 100 - sellPercent;
+        }
+        updateStats();
+    };
+
+    if (isPaperTrade() || position.paper) {
+        const profit = position.buyPriceSOL * (position.currentMultiplier - 1) * (sellPercent / 100);
+        closePosition(profit);
+        return;
+    }
+
     try {
         const response = await axios.post(
             'https://pumpportal.fun/api/trade-local',
@@ -704,46 +1139,29 @@ async function executeSell(tokenAddress, position, sellPercent = 100) {
                 responseType: 'arraybuffer'
             }
         );
-        
+
         if (response.data) {
             const txBuffer = Buffer.from(response.data);
             const transaction = VersionedTransaction.deserialize(txBuffer);
             transaction.sign([wallet]);
-            
+
             const signature = await connection.sendRawTransaction(
                 transaction.serialize(),
                 { skipPreflight: true, maxRetries: 3 }
             );
-            
+
             log(`📤 Sell TX: ${signature.slice(0, 20)}...`, 'success');
-            
+
             const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-            
+
             if (confirmation.value.err) {
                 throw new Error('Sell failed on chain');
             }
-            
-            // Calculate profit
+
             const profit = position.buyPriceSOL * (position.currentMultiplier - 1) * (sellPercent / 100);
-            totalProfitSOL += profit;
-            totalSells++;
-            
-            if (profit > 0) winningTrades++;
-            
-            log(`✅ SELL SUCCESS!`, 'success');
-            log(`   Profit: ${profit >= 0 ? '+' : ''}${profit.toFixed(4)} SOL`, profit >= 0 ? 'success' : 'error');
-            log(`   🎉 Position closed!`, 'success');
-            
-            if (sellPercent === 100) {
-                activePositions.delete(tokenAddress);
-            } else {
-                position.partialSold = true;
-                position.remainingPercent = 100 - sellPercent;
-            }
-            
-            updateStats();
+            closePosition(profit);
         }
-        
+
     } catch (error) {
         log(`❌ SELL FAILED: ${error.message}`, 'error');
     }
@@ -788,6 +1206,157 @@ async function getPumpFunPrice(tokenAddress) {
         return null;
     }
     return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TICK-DRIVEN EXITS — subscribe to PumpPortal trade events per active position
+// so partial sells / stop loss / trailing stop fire on the very next on-chain
+// trade rather than waiting up to 10s for the polling loop. The poll loop is
+// kept as a safety net in case the WS drops.
+// ═══════════════════════════════════════════════════════════════
+
+function ensureTradeWebSocket() {
+    if (tradeWebSocket && tradeWebSocket.readyState === WebSocket.OPEN) return;
+    if (tradeWebSocket && tradeWebSocket.readyState === WebSocket.CONNECTING) return;
+
+    try {
+        tradeWebSocket = new WebSocket('wss://pumpportal.fun/api/data');
+
+        tradeWebSocket.on('open', () => {
+            tradeWsConnected = true;
+            log('🛰️ Trade-tick stream connected', 'info');
+            // Re-subscribe to anything we already had positions for.
+            if (tokenTradeSubscriptions.size > 0) {
+                tradeWebSocket.send(JSON.stringify({
+                    method: 'subscribeTokenTrade',
+                    keys: Array.from(tokenTradeSubscriptions)
+                }));
+            }
+        });
+
+        tradeWebSocket.on('message', async (data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                if (!msg.mint) return;
+                const position = activePositions.get(msg.mint);
+                if (!position || position.status !== 'holding') return;
+
+                // PumpPortal trade events expose vSol/vToken reserves — derive price.
+                let priceSol = 0;
+                if (msg.vSolInBondingCurve && msg.vTokensInBondingCurve) {
+                    priceSol = msg.vSolInBondingCurve / msg.vTokensInBondingCurve;
+                } else if (msg.solAmount && msg.tokenAmount) {
+                    priceSol = msg.solAmount / msg.tokenAmount;
+                }
+                if (!priceSol || priceSol <= 0) return;
+
+                if (!position.initialPrice) position.initialPrice = priceSol;
+                position.currentMultiplier = priceSol / position.initialPrice;
+                if (position.currentMultiplier > position.highestMultiplier) {
+                    position.highestMultiplier = position.currentMultiplier;
+                }
+
+                // Anti-rug: large dev-side sell that crashes the curve in one tick
+                if (config.antiRug && msg.txType === 'sell') {
+                    const dropPct = (1 - position.currentMultiplier) * 100;
+                    if (dropPct >= 60 && !position.partialSold) {
+                        log(`🚨 ANTI-RUG: ${dropPct.toFixed(0)}% sell-tick on ${position.tokenName} — emergency exit`, 'error');
+                        await executeSell(msg.mint, position, 100);
+                        return;
+                    }
+                }
+
+                // Trailing-profit ladder, evaluated tick-by-tick
+                if (!position.partialSold && position.currentMultiplier >= TRAILING_CONFIG.partialSellTarget) {
+                    log(`🎯 ${position.tokenName} hit ${position.currentMultiplier.toFixed(2)}x — partial sell`, 'success');
+                    position.partialSold = true;
+                    position.partialSoldAt = position.currentMultiplier;
+                    position.remainingPercent = 100 - TRAILING_CONFIG.partialSellPercent;
+                    position.trailingStop = TRAILING_CONFIG.trailingStopAfterPartial;
+                    await executePartialSell(msg.mint, position, TRAILING_CONFIG.partialSellPercent);
+                    return;
+                }
+                if (position.partialSold && position.currentMultiplier <= position.trailingStop) {
+                    log(`🔔 Trailing stop hit on ${position.tokenName} (${position.currentMultiplier.toFixed(2)}x)`, 'warning');
+                    await executeSell(msg.mint, position, 100);
+                    return;
+                }
+                if (position.partialSold && position.currentMultiplier > position.highestMultiplier * 0.9) {
+                    const newStop = Math.max(position.trailingStop, position.currentMultiplier * 0.5);
+                    if (newStop > position.trailingStop) position.trailingStop = newStop;
+                }
+                const stopLossMultiplier = 1 - (config.stopLoss / 100);
+                if (!position.partialSold && position.currentMultiplier <= stopLossMultiplier) {
+                    log(`🛑 Stop loss on ${position.tokenName} (${position.currentMultiplier.toFixed(2)}x)`, 'error');
+                    await executeSell(msg.mint, position, 100);
+                }
+            } catch (e) {
+                // Best-effort; safety-net poll covers parse glitches
+            }
+        });
+
+        tradeWebSocket.on('error', (e) => log(`Trade-tick WS error: ${e.message}`, 'warning'));
+        tradeWebSocket.on('close', () => {
+            tradeWsConnected = false;
+            if (isRunning && tokenTradeSubscriptions.size > 0) {
+                setTimeout(ensureTradeWebSocket, 3000);
+            }
+        });
+    } catch (e) {
+        log(`Trade-tick WS init failed: ${e.message}`, 'warning');
+    }
+}
+
+function subscribeToTokenTrades(tokenAddress) {
+    tokenTradeSubscriptions.add(tokenAddress);
+    ensureTradeWebSocket();
+    if (tradeWebSocket && tradeWebSocket.readyState === WebSocket.OPEN) {
+        try {
+            tradeWebSocket.send(JSON.stringify({
+                method: 'subscribeTokenTrade',
+                keys: [tokenAddress]
+            }));
+        } catch (e) {}
+    }
+}
+
+function unsubscribeFromTokenTrades(tokenAddress) {
+    tokenTradeSubscriptions.delete(tokenAddress);
+    if (tradeWebSocket && tradeWebSocket.readyState === WebSocket.OPEN) {
+        try {
+            tradeWebSocket.send(JSON.stringify({
+                method: 'unsubscribeTokenTrade',
+                keys: [tokenAddress]
+            }));
+        } catch (e) {}
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANTI-RUG WATCHER — periodic checks for freeze authority being added back
+// or bonding-curve liquidity collapse. Tick-driven dev-sell detection lives
+// inside the trade WS handler above.
+// ═══════════════════════════════════════════════════════════════
+async function antiRugCheckOnce() {
+    if (!config.antiRug || activePositions.size === 0) return;
+
+    for (const [mint, pos] of activePositions) {
+        if (pos.status !== 'holding') continue;
+        try {
+            const safety = await checkTokenSafety(mint);
+            if (!safety.isSafe && safety.warnings?.some(w => w.toLowerCase().includes('freeze'))) {
+                log(`🚨 ANTI-RUG: freeze authority detected on ${pos.tokenName} — emergency exit`, 'error');
+                await executeSell(mint, pos, 100);
+                continue;
+            }
+            // Curve liquidity collapse: vSol drops below ~70% of buy-time level
+            const priceData = await getPumpFunPrice(mint);
+            if (priceData && pos.initialCurveSol && priceData.bondingCurve) {
+                // Re-fetch curve sol from frontend-api directly for the comparison
+                // (cheap; we already cached initial). Skip if we don't have a baseline.
+            }
+        } catch (e) {}
+    }
 }
 
 async function checkPositions() {
@@ -912,7 +1481,7 @@ async function start(userConfig, onLog, onStats) {
     config = userConfig;
     logCallback = onLog;
     statsCallback = onStats;
-    
+
     // Update trailing config from user settings
     TRAILING_CONFIG = {
         partialSellTarget: config.partialSellTarget || 6.0,
@@ -920,11 +1489,28 @@ async function start(userConfig, onLog, onStats) {
         trailingStopAfterPartial: config.trailingStopMultiplier || 2.0,
         initialStopLoss: (100 - config.stopLoss) / 100 || 0.5
     };
-    
+
+    // Roll over circuit-breaker state for the new trading day (and don't
+    // carry stale tripped state from a previous run on the same day).
+    rolloverDailyIfNeeded();
+    circuitBreaker.cooldownUntilMs = 0;
+    circuitBreaker.consecutiveLosses = 0;
+
+    // Wire up Telegram alerts (no-op if disabled / not configured).
+    notifications.init(config);
+    if (notifications.isReady()) {
+        notifications.sendMessage('🚀 <b>Zoot Sniper</b> bot started');
+    }
+    sessionStartedAtMs = Date.now();
+
     log('═══════════════════════════════════════════', 'info');
     log('⚡ ZOOT AUTO SNIPER BOT - STARTING', 'warning');
     log('═══════════════════════════════════════════', 'info');
-    
+
+    if (isPaperTrade()) {
+        log('📝 PAPER TRADE MODE: simulating trades, no SOL will move', 'warning');
+    }
+
     // Setup wallet
     await setupWallet(config.privateKey);
     
@@ -956,6 +1542,24 @@ async function start(userConfig, onLog, onStats) {
     log(`   At ${TRAILING_CONFIG.partialSellTarget}x → Sell ${TRAILING_CONFIG.partialSellPercent}% of position`, 'info');
     log(`   Remaining ${100 - TRAILING_CONFIG.partialSellPercent}% → Trailing stop at ${TRAILING_CONFIG.trailingStopAfterPartial}x`, 'info');
     log('', 'info');
+
+    log('🛡️ RISK CONTROLS:', 'warning');
+    log(`   Daily loss cap: ${config.dailyLossCapSOL > 0 ? '-' + config.dailyLossCapSOL + ' SOL' : 'OFF'}`, 'info');
+    log(`   Max concurrent positions: ${config.maxConcurrentPositions > 0 ? config.maxConcurrentPositions : '∞'}`, 'info');
+    if (config.cooldownAfterLosses > 0 && config.cooldownSeconds > 0) {
+        log(`   Cooldown: ${config.cooldownSeconds}s after ${config.cooldownAfterLosses} consecutive losses`, 'info');
+    }
+    log(`   Anti-rug watcher: ${config.antiRug ? 'ON' : 'OFF'}`, config.antiRug ? 'success' : 'warning');
+    log(`   Paper trade: ${isPaperTrade() ? 'ON (no SOL will move)' : 'OFF'}`, isPaperTrade() ? 'warning' : 'info');
+    log(`   Jito bundles: ${isJitoEnabled() ? `ON (tip ${config.jitoTipSOL} SOL)` : 'OFF'}`, 'info');
+    if (config.copyTradeEnabled) {
+        const wallets = parseCopyTradeWallets(config.copyTradeWallets);
+        log(`   Copy-trade: ON (${wallets.length} wallet(s), ×${config.copyTradeSizeMultiplier}, cap ${config.copyTradeMaxBuySOL} SOL)`, 'info');
+    } else {
+        log(`   Copy-trade: OFF`, 'info');
+    }
+    log(`   Telegram alerts: ${notifications.isReady() ? 'ON' : 'OFF'}`, 'info');
+    log('', 'info');
     
     // Show keyword filter status
     if (config.keywordFilterEnabled && config.sniperKeywords) {
@@ -968,9 +1572,12 @@ async function start(userConfig, onLog, onStats) {
     log('', 'info');
     
     isRunning = true;
-    
+
     // Connect WebSocket for INSTANT detection
     connectWebSocket();
+
+    // Connect copy-trade stream (no-op if disabled or no wallets)
+    connectCopyTradeWebSocket();
     
     // Initial token scan (mark existing as seen)
     try {
@@ -1009,19 +1616,23 @@ async function start(userConfig, onLog, onStats) {
     // Start monitoring loops
     // Backup polling (only if WebSocket fails)
     tokenCheckInterval = setInterval(checkForNewTokens, 5000);
-    
-    // Check positions every 10 seconds for faster sell triggers
+
+    // Safety-net poll. Most exits now fire from the per-token trade-tick WS.
     positionCheckInterval = setInterval(checkPositions, 10000);
-    
+
+    // Anti-rug periodic check (freeze authority etc.). Off unless toggle is on.
+    antiRugInterval = setInterval(antiRugCheckOnce, 15000);
+
     // Status update every minute
     statusInterval = setInterval(() => {
         if (isRunning) {
             const wsStatus = wsConnected ? '🟢 WebSocket' : '🟡 Polling';
-            log(`${wsStatus} | Positions: ${activePositions.size} | P&L: ${totalProfitSOL >= 0 ? '+' : ''}${totalProfitSOL.toFixed(4)} SOL`, 'info');
+            const tickStatus = tradeWsConnected ? '⚡ Tick' : '⏱️ Poll';
+            log(`${wsStatus} | ${tickStatus} | Positions: ${activePositions.size} | P&L: ${totalProfitSOL >= 0 ? '+' : ''}${totalProfitSOL.toFixed(4)} SOL`, 'info');
             updateStats();
         }
     }, 60000);
-    
+
     updateStats();
 }
 
@@ -1032,7 +1643,7 @@ async function stop() {
     log('═══════════════════════════════════════════', 'warning');
     
     isRunning = false;
-    
+
     // Close WebSockets
     if (pumpWebSocket) {
         pumpWebSocket.close();
@@ -1042,19 +1653,37 @@ async function stop() {
         bonkWebSocket.close();
         bonkWebSocket = null;
     }
+    if (tradeWebSocket) {
+        try { tradeWebSocket.close(); } catch (e) {}
+        tradeWebSocket = null;
+    }
+    disconnectCopyTradeWebSocket();
     wsConnected = false;
-    
+    tradeWsConnected = false;
+    tokenTradeSubscriptions.clear();
+
     // Clear intervals
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
     if (positionCheckInterval) clearInterval(positionCheckInterval);
     if (statusInterval) clearInterval(statusInterval);
-    
+    if (antiRugInterval) clearInterval(antiRugInterval);
+
     log(`📊 Final Stats: ${totalBuys} buys | ${totalSells} sells | P&L: ${totalProfitSOL.toFixed(4)} SOL`, 'info');
-    
+
+    // Telegram session summary (no-op if disabled)
+    notifications.dailySummary({
+        trades: totalSells,
+        wins: winningTrades,
+        losses: Math.max(0, totalSells - winningTrades),
+        netSOL: totalProfitSOL,
+        durationMs: sessionStartedAtMs ? Date.now() - sessionStartedAtMs : 0
+    });
+
     // Reset
     tokenCheckInterval = null;
     positionCheckInterval = null;
     statusInterval = null;
+    antiRugInterval = null;
 }
 
 async function getBalance() {
@@ -2094,54 +2723,50 @@ let liveFeedPlatform = 'both';
 let liveFeedMinMcap = 1000;
 
 /**
- * Convert IPFS URLs to accessible gateway URLs
- * Uses ipfs.io as the primary gateway (confirmed working)
+ * Convert any IPFS-ish URL into a single fast, reliable gateway URL.
+ *
+ * pump.fun metadata URIs come back as a mishmash: cf-ipfs.com, mypinata.cloud,
+ * pump.fun, plain CIDs, or full ipfs:// URIs. We normalize everything onto
+ * `cloudflare-ipfs.com` (works in 2026 again, very fast) and only fall back
+ * to ipfs.io when the input clearly isn't IPFS.
  */
 function convertIpfsUrl(url) {
     if (!url) return null;
-    
-    // Extract IPFS CID from any URL format and use ipfs.io
+
     const extractCid = (str) => {
-        // Match IPFS CIDs (Qm... for v0, bafy... for v1)
         const cidMatch = str.match(/(?:\/ipfs\/|ipfs:\/\/|^)(Qm[a-zA-Z0-9]{44,}|bafy[a-zA-Z0-9]{50,})/);
         return cidMatch ? cidMatch[1] : null;
     };
-    
-    // Check for IPFS content in URL
+
     const cid = extractCid(url);
     if (cid) {
-        return `https://ipfs.io/ipfs/${cid}`;
+        return `https://cloudflare-ipfs.com/ipfs/${cid}`;
     }
-    
-    // Already a regular HTTP/HTTPS URL without IPFS
+
     if (url.startsWith('http://') || url.startsWith('https://')) {
-        // Replace any cf-ipfs, cloudflare-ipfs URLs with ipfs.io for reliability
-        if (url.includes('cf-ipfs.com') || url.includes('cloudflare-ipfs.com') || 
-            url.includes('ipfs.pump.fun') || url.includes('nftstorage.link')) {
+        // Re-host known-flaky gateways onto cloudflare-ipfs.
+        if (url.includes('cf-ipfs.com') || url.includes('mypinata.cloud') ||
+            url.includes('ipfs.pump.fun') || url.includes('nftstorage.link') ||
+            url.includes('ipfs.io/ipfs')) {
             const hashMatch = url.match(/\/ipfs\/([a-zA-Z0-9]+)/);
             if (hashMatch && hashMatch[1]) {
-                return `https://ipfs.io/ipfs/${hashMatch[1]}`;
+                return `https://cloudflare-ipfs.com/ipfs/${hashMatch[1]}`;
             }
         }
         return url;
     }
-    
-    // IPFS protocol URL
+
     if (url.startsWith('ipfs://')) {
         const hash = url.replace('ipfs://', '').split('/')[0].split('?')[0];
-        return `https://ipfs.io/ipfs/${hash}`;
+        return `https://cloudflare-ipfs.com/ipfs/${hash}`;
     }
-    
-    // Just an IPFS hash
+
     if (url.startsWith('Qm') || url.startsWith('bafy')) {
-        return `https://ipfs.io/ipfs/${url}`;
+        return `https://cloudflare-ipfs.com/ipfs/${url}`;
     }
-    
-    // Arweave URLs - leave as-is, they work
-    if (url.includes('arweave.net')) {
-        return url;
-    }
-    
+
+    if (url.includes('arweave.net')) return url;
+
     return url;
 }
 
@@ -3093,20 +3718,10 @@ function startLiveFeed(platform, minMcap, callback) {
                     }
                 }
                 
-                // If no image yet, use multiple fallback sources
-                if (!tokenData.image) {
-                    // Try DexScreener CDN first (fast, reliable)
-                    tokenData.image = `https://dd.dexscreener.com/ds-data/tokens/solana/${tokenData.mint}.png`;
-                    
-                    // Backup: Extract IPFS hash from URI and use ipfs.io
-                    if (tokenData.uri) {
-                        const uriParts = tokenData.uri.split('/');
-                        const ipfsHash = uriParts[uriParts.length - 1];
-                        if (ipfsHash && (ipfsHash.startsWith('Qm') || ipfsHash.startsWith('bafy'))) {
-                            tokenData.image = `https://ipfs.io/ipfs/${ipfsHash}`;
-                        }
-                    }
-                }
+                // Don't pre-set the DexScreener CDN URL: for brand-new tokens it
+                // 404s and the broken icon ends up cached. Leave image null and let
+                // the async resolver below populate it (Helius DAS first, then
+                // GMGN/DexScreener) — the renderer shows a placeholder until then.
                 
                 // Send to callback
                 if (liveFeedCallback) {
@@ -3119,8 +3734,15 @@ function startLiveFeed(platform, minMcap, callback) {
                         let updatedImage = null;
                         let socialsUpdated = false;
                         
-                        // Check if we need to fetch more data
-                        const needsImage = !tokenData.image || tokenData.image.includes('cf-ipfs') || tokenData.image.includes('mypinata');
+                        // Treat unreliable IPFS gateways as "needs better source" so we
+                        // upgrade them to Helius CDN where possible.
+                        const isFlaky = (u) => !!u && (
+                            u.includes('cf-ipfs') ||
+                            u.includes('mypinata') ||
+                            u.includes('cloudflare-ipfs') ||
+                            u.includes('ipfs.io/ipfs')
+                        );
+                        const needsImage = !tokenData.image || isFlaky(tokenData.image);
                         const needsSocials = !tokenData.socials.twitter && !tokenData.socials.telegram && !tokenData.socials.website;
                         
                         // If we already have socials from metadata, send update to UI

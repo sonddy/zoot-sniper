@@ -1,0 +1,10 @@
+name = "zoot-license"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+
+[[kv_namespaces]]
+binding = "ZOOT_LICENSES"
+id = "REPLACE_ME_WITH_KV_NAMESPACE_ID"
+
+# Set ADMIN_TOKEN as a secret:
+#   wrangler secret put ADMIN_TOKEN
